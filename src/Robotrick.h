@@ -56,9 +56,9 @@
 #define RT_COUNTS_PER_REV      493     // معايرة المسافة: 478×(100/97) — دقيق على 100cm
 
 // ── Speeds (0–255) ─────────────────────────────────
-#define RT_DRIVE_SPEED   30   // سرعة المشي المستقيم
-#define RT_DRIVE_MIN      30   // أدنى سرعة (لازم تكفي تحرّك الروبوت بدون ما يطفي/يطنّ)
-#define RT_TURN_FAST     30   // Phase 1: سرعة اللف السريعة
+#define RT_DRIVE_SPEED   120   // سرعة المشي المستقيم
+#define RT_DRIVE_MIN      80   // أدنى سرعة (لازم تكفي تحرّك الروبوت بدون ما يطفي/يطنّ)
+#define RT_TURN_FAST     120   // Phase 1: سرعة اللف السريعة
 #define RT_TURN_SLOW_MAX  75   // Phase 2: أقصى سرعة بطيئة
 #define RT_TURN_SLOW_MIN  50   // Phase 2: أدنى سرعة (ما يطفي)
 
@@ -119,23 +119,40 @@
 #define RT_TURN_TOLERANCE  1.5f   // توقف ضمن هالزاوية
 #define RT_TURN_BRAKE_MS   30     // فرملة عكسية بعد الوصول
 
+// ── Pivot turn (عجلة وحدة تتحرك، التانية واقفة) ──────
+#define RT_PIVOT_FAST    120     // سرعة العجلة المتحركة Phase 1 (عجلة وحدة = بدها قوة أكثر)
+#define RT_PIVOT_SLOW     75     // Phase 2 أقصى سرعة
+#define RT_PIVOT_MIN      55     // Phase 2 أدنى سرعة (ما تطفي)
+#define RT_PIVOT_STOP_DEG 0.0f   // يوقف قبل الهدف بهالزاوية (تعويض الاندفاع) — زِد لو لسا يزيد عن 90
+#define RT_PIVOT_BRAKE   90     // قوة الفرملة العكسية (counter-spin بالعجلتين متل turn)
+
 // ══════════════════════════════════════════════════
 //  ██  v2 PHASE 3 — LINE FOLLOWER (الـ 10 حساسات الوسطى)  ██
 //  لازم lineCalibrate() مرة كل تشغيل (حرّك الروبوت يدوياً فوق الخط)
 // ══════════════════════════════════════════════════
 #define RT_QTR_N          14      // 14 حساس وسطى (index 5..18) — مجال أوسع = ما يضيع بسهولة
-#define RT_QTR_CENTER   6500      // (RT_QTR_N-1)*1000/2 — النص
+#define RT_QTR_CENTER   8500      // (RT_QTR_N-1)*1000/2 — النص
 #define RT_QTR_EEPROM_ADDR  0     // مكان حفظ معايرة الخط بالـ EEPROM (تنحفظ مرة، تفضل للأبد)
 
-#define RT_LINE_BASE       60     // سرعة الأساس (لازم > عتبة الحركة ~90 — لا تنزل أكثر)
-#define RT_LINE_MAX       70     // أقصى سرعة عجلة أثناء التتبع
-#define RT_LINE_MIN        50     // أدنى سرعة عجلة (ما تصير سالبة عالكوع)
-#define RT_LINE_KP        2.0f  // P على موقع الخط (أقل = أنعم، أعلى = يهتز)
-#define RT_LINE_KD        0.0f  // D — تخميد
-#define RT_LINE_ALPHA     0.20f   // فلتر الموقع (أصغر = أنعم ضد الرجّة)
+#define RT_LINE_BASE       50     // سرعة الأساس (فوق عتبة الحركة ~90 عشان يتحرّك أصلاً)
+#define RT_LINE_MAX       100     // أقصى سرعة عجلة (نافذة واسعة = قدرة لف قوية)
+#define RT_LINE_MIN        30     // أدنى سرعة عجلة (الداخلية تبطّئ كتير عالكوع الحاد)
+#define RT_LINE_KP       0.03f  // P على موقع الخط (أوطى = أنعم على المستقيم)
+#define RT_LINE_KD       0.060f  // D — تخميد يمنع التذبذب
+#define RT_LINE_ALPHA     0.15f   // فلتر الموقع أقوى (أصغر = أنعم ضد الرجّة)
 #define RT_LINE_STEER_SIGN  -1    // انقلبت: كان يصحّح بعكس الاتجاه ويفلت عن الخط
-#define RT_LINE_DEADBAND  350     // لو الخط قريب من النص (±هيك) امشي مستقيم بدون تصحيح
+#define RT_LINE_DEADBAND  700     // نطاق أوسع: قريب من النص = امشي مستقيم بدون تصحيح (ضد الرجّة)
 #define RT_LINE_WINDOW      3     // نحسب الموقع حوالين أعلى حساس ±هيك (أدق، يتجاهل الضوضاء)
+#define RT_LINE_KP_BOOST  5.0f    // gain scheduling: كل ما بعد الخط عن النص، KP يزيد (يمسك الكوع)
+#define RT_LINE_SLOW       70     // سرعة الأساس عند الكوع الحاد (يبطّئ ليلحق يلف)
+
+// ── Line-Follower 2 (خوارزمية بديلة للتجربة — أسلوب MegaShield) ──
+//   الفرق: كشف التقاطع = الطرفين غامقين معاً، centroid كامل، KP ثابت
+#define RT_LF2_KP         1.0f    // قوة التوجيه (الخطأ = (المركز − النص) × 10)
+#define RT_LF2_KD         0.5f    // تخميد
+#define RT_LF2_OUTER_N     3      // كم حساس بكل طرف (يسار/يمين)
+#define RT_LF2_OUTER_DARK  2      // كم غامق بكل طرف معاً ليعتبر تقاطع
+#define RT_LF2_FORCE_MS  400      // مدة المشي مستقيم عبر التقاطع
 
 // ما في حساسات ميتة بالوسط 10 (99 = معطّل)
 #define RT_QTR_DEAD_1     99
@@ -178,8 +195,10 @@ public:
     // ── Movement (blocking) ────────────────────────
     void forward(float cm);     // مستقيم لقدام + heading hold
     void backward(float cm);    // مستقيم لخلف
-    void turnLeft(float deg);   // لف يسار بالجايرو
-    void turnRight(float deg);  // لف يمين بالجايرو
+    void turnLeft(float deg);   // لف يسار بالجايرو (spin — الجهتين)
+    void turnRight(float deg);  // لف يمين بالجايرو (spin — الجهتين)
+    void pivot(char wheel, float deg);  // pivot: عجلة وحدة تتحرك، التانية واقفة
+                                // wheel: 'L' أو 'R' (اللي تتحرك) — deg موجب=قدام، سالب=خلف
     void stop();                // وقوف
 
     // ── Sensors ────────────────────────────────────
@@ -193,6 +212,7 @@ public:
     void lineSaveCalibration();                    // احفظ المعايرة الحالية بالـ EEPROM
     bool followLineToJunction(uint8_t nJunctions = 1);  // اتبع الخط لحد التقاطع الـ n
     bool followLineForCM(float cm);                // اتبع الخط لمسافة محددة
+    bool followLine2(float cm);                    // خوارزمية بديلة (أسلوب MegaShield) للتجربة
     uint16_t linePosition();                       // 0..24000 (12000 = بالنص)
     void     lineReadRaw(uint16_t* dest25);        // قراءة خام (بدون calibration)
     uint16_t lineRead(uint16_t* dest25);           // قراءة calibrated + الموقع (65535 = مش معاير)

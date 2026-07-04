@@ -34,12 +34,15 @@ void printMenu() {
     Serial.println(F("  b <cm>   backward    (b 30)"));
     Serial.println(F("  l <deg>  turn left   (l 90)"));
     Serial.println(F("  r <deg>  turn right  (r 90)"));
+    Serial.println(F("  p <deg>  PIVOT left wheel  (+قدام/-خلف)  (p 90)"));
+    Serial.println(F("  o <deg>  PIVOT right wheel (+قدام/-خلف)  (o -90)"));
     Serial.println(F("  e        read encoders (L, R, ratio)"));
     Serial.println(F("  h        heading"));
     Serial.println(F("  y        GYRO TEST (rotate by hand, watch heading)"));
     Serial.println(F("  k        LINE calibrate مرة وحدة (يحفظ EEPROM للأبد)"));
     Serial.println(F("  j <n>    follow line to junction #n  (j 1)"));
     Serial.println(F("  m <cm>   follow line for cm          (m 40)"));
+    Serial.println(F("  n <cm>   LINE2 خوارزمية بديلة         (n 40)"));
     Serial.println(F("  q        square: (fwd30 + left90) x4"));
     Serial.println(F("  4 <spd>  motor4 (رافعة) بسرعة spd (-255..255، 0=وقوف)"));
     Serial.println(F("  x        stop        ?  menu"));
@@ -91,6 +94,14 @@ void handle(char cmd, float val) {
         bot.turnRight(val);
         Serial.print(F("  heading=")); Serial.print(bot.heading(), 1); Serial.println(F("°"));
     }
+    else if (cmd == 'p') {   // pivot على العجلة اليسار (+قدام / -خلف)
+        Serial.print(F(">> PIVOT L ")); Serial.println(val);
+        bot.pivot('L', val);
+    }
+    else if (cmd == 'o') {   // pivot على العجلة اليمين (+قدام / -خلف)
+        Serial.print(F(">> PIVOT R ")); Serial.println(val);
+        bot.pivot('R', val);
+    }
     else if (cmd == 'e') {
         printEnc();
     }
@@ -123,6 +134,11 @@ void handle(char cmd, float val) {
     else if (cmd == 'm') {
         Serial.print(F(">> follow line for ")); Serial.print(val); Serial.println(F("cm"));
         bool ok = bot.followLineForCM(val);
+        Serial.println(ok ? F("  SUCCESS") : F("  FAILED (lost/timeout)"));
+    }
+    else if (cmd == 'n') {
+        Serial.print(F(">> LINE2 (خوارزمية بديلة) for ")); Serial.print(val); Serial.println(F("cm"));
+        bool ok = bot.followLine2(val);
         Serial.println(ok ? F("  SUCCESS") : F("  FAILED (lost/timeout)"));
     }
     else if (cmd == 'q') {

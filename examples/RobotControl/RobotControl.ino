@@ -189,6 +189,19 @@ void handleLine(char* line) {
     return;
   }
 
+  // ── PIVOT <L|R> <deg> ── (one wheel moves, other stopped; +fwd/-back)
+  if (strcmp(cmd, "PIVOT") == 0) {
+    char* w = strtok(NULL, " \t");
+    float d;
+    if (w == NULL || !nextFloat(&d)) { Serial.println(F("ERR PIVOT needs <L|R> <deg>")); return; }
+    Serial.println(F("ACK PIVOT"));
+    busy = true;
+    bot.pivot(w[0], d);
+    busy = false;
+    Serial.println(F("DONE PIVOT"));
+    return;
+  }
+
   // ── STOP ── (non-blocking)
   if (strcmp(cmd, "STOP") == 0) {
     Serial.println(F("ACK STOP"));

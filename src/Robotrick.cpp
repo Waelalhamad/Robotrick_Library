@@ -314,6 +314,56 @@ void Robotrick::turn(float deg) {
 }
 
 // ─────────────────────────────────────────────────────
+//  PIVOT — عجلة وحدة تتحرك، التانية واقفة (بالجايرو)
+//  wheel: 'L' أو 'R' = العجلة اللي تتحرك
+//  deg  : موجب = تلك العجلة لقدام، سالب = لخلف؛ |deg| = زاوية الدوران
+// ─────────────────────────────────────────────────────
+void Robotrick::pivot(char wheel, float deg) {
+    if (fabs(deg) < 0.5f) return;
+    bool useLeft = (wheel == 'L' || wheel == 'l');
+    int  sgn = (deg >= 0) ? 1 : -1;          // + = العجلة المتحركة لقدام
+    float targetMag = fabs(deg);
+
+    Serial.print(F("[Robotrick] PIVOT ")); Serial.print(useLeft ? F("L") : F("R"));
+    Serial.print(sgn > 0 ? F(" FWD ") : F(" BACK ")); Serial.print(targetMag); Serial.println(F("°"));
+
+    resetHeading();
+    float slowStart = targetMag - RT_TURN_FAST_DEG;
+    if (slowStart < 0) slowStart = 0;
+
+    // Phase 1: سرعة كاملة — عجلة وحدة، التانية = 0
+    if (useLeft) { _spinL(sgn * RT_PIVOT_FAST); _spinR(0); }
+    else         { _spinR(sgn * RT_PIVOT_FAST); _spinL(0); }
+
+    uint32_t timeout = millis() + RT_TURN_TIMEOUT;
+    while (millis() < timeout) {
+        _updateHeading();
+        if (fabs(_heading) >= slowStart) break;
+    }
+
+    // Phase 2: P-control بطيء — يوقف الدفع قبل الهدف بـ RT_PIVOT_STOP_DEG (تعويض الاندفاع)
+    while (millis() < timeout) {
+        _updateHeading();
+        float err = targetMag - fabs(_heading);
+        if (err <= RT_PIVOT_STOP_DEG) break;
+        int spd = constrain((int)(RT_TURN_KP * err), RT_PIVOT_MIN, RT_PIVOT_SLOW);
+        if (useLeft) { _spinL(sgn * spd); _spinR(0); }
+        else         { _spinR(sgn * spd); _spinL(0); }
+    }
+
+    // فرملة قوية: counter-spin بالعجلتين (متل turn) — يقتل اندفاع الدوران
+    // العجلة المتحركة تنعكس، والواقفة تدفع بالعكس → عزم مضاد
+    if (useLeft) { _spinL(-sgn * RT_PIVOT_BRAKE); _spinR( sgn * RT_PIVOT_BRAKE); }
+    else         { _spinR(-sgn * RT_PIVOT_BRAKE); _spinL( sgn * RT_PIVOT_BRAKE); }
+    delay(RT_TURN_BRAKE_MS);
+
+    stop();
+    delay(150);
+    _updateHeading();   // اقرأ الزاوية النهائية بعد ما استقر
+    Serial.print(F("  done. heading=")); Serial.print(_heading, 1); Serial.println(F("°"));
+}
+
+// ─────────────────────────────────────────────────────
 //  LOW-LEVEL MOTORS
 // ─────────────────────────────────────────────────────
 void Robotrick::setMotors(int left, int right) {
@@ -552,7 +602,10 @@ bool Robotrick::_followLine(uint8_t nJunctions, float cm) {
         }
 
         // ── PD على موقع الخط ──────────────────────
-        posFilt += RT_LINE_ALPHA * ((float)pos - posFilt);
+        // أثناء التقاطع (كل الحساسات غامقة) القراءة مشوّشة → جمّد الموقع (لا يجنّ)
+        bool atJunction = (darkN >= RT_JUNCT_DARK_N);
+        if (!atJunction)
+            posFilt += RT_LINE_ALPHA * ((float)pos - posFilt);
         float err  = posFilt - (float)RT_QTR_CENTER;  // موجب = الخط على اليمين
         lastDir = (err > 200) ? 1 : (err < -200 ? -1 : lastDir);
         // deadband: قريب من النص = امشي مستقيم (يمنع الرجّة)
@@ -560,15 +613,119 @@ bool Robotrick::_followLine(uint8_t nJunctions, float cm) {
         float dErr = (err - errPrev) / dt;
         errPrev = err;
 
-        float corr = RT_LINE_STEER_SIGN * (RT_LINE_KP * err + RT_LINE_KD * dErr * 0.001f);
+        // نسبة البعد عن النص 0..1 (0=بالنص، 1=عالطرف/كوع حاد)
+        float ratio = fabs(err) / (float)RT_QTR_CENTER;
+        if (ratio > 1.0f) ratio = 1.0f;
 
-        int l = constrain((int)(RT_LINE_BASE + corr), RT_LINE_MIN, RT_LINE_MAX);
-        int r = constrain((int)(RT_LINE_BASE - corr), RT_LINE_MIN, RT_LINE_MAX);
+        // gain scheduling: KP ناعم بالنص، يقوى عالكوع الحاد
+        float kpEff = RT_LINE_KP * (1.0f + RT_LINE_KP_BOOST * ratio * ratio);
+        float corr = RT_LINE_STEER_SIGN * (kpEff * err + RT_LINE_KD * dErr * 0.001f);
+
+        // curvature speed: بطّئ الأساس عالكوع الحاد ليلحق يلف بدل ما يطير
+        int base = RT_LINE_BASE - (int)((RT_LINE_BASE - RT_LINE_SLOW) * ratio);
+
+        // تجاهل التقاطع: بأمر followLineForCM (nJunctions==0) اعبر التقاطع مستقيم
+        // بدون تصحيح ولا تبطئة — يمنع "الجنون" عند الـ + و T
+        if (atJunction && nJunctions == 0) { corr = 0; base = RT_LINE_BASE; }
+
+        int l = constrain((int)(base + corr), RT_LINE_MIN, RT_LINE_MAX);
+        int r = constrain((int)(base - corr), RT_LINE_MIN, RT_LINE_MAX);
         setMotors(l, r);
     }
 
     stop();
     Serial.println(F("[Robotrick] LINE TIMEOUT — abort"));
+    return false;
+}
+
+// ─────────────────────────────────────────────────────
+//  LINE FOLLOWER 2 — خوارزمية بديلة (أسلوب MegaShield)
+//  centroid كامل + كشف تقاطع = الطرفين غامقين معاً + force-straight
+// ─────────────────────────────────────────────────────
+bool Robotrick::followLine2(float cm) {
+    if (!_qtrReady && !lineLoadCalibration()) {
+        Serial.println(F("[Robotrick] ERR: no line calibration — LINECAL first."));
+        return false;
+    }
+    Serial.print(F("[Robotrick] LINE2 ")); Serial.print(cm); Serial.println(F("cm"));
+
+    float cmPerCount   = (3.14159f * RT_WHEEL_DIAMETER_MM / RT_COUNTS_PER_REV) / 10.0f;
+    long  targetCounts = (cm > 0) ? (long)(cm / cmPerCount) : 0;
+    resetEncoders();
+
+    const float center = (RT_QTR_N - 1) / 2.0f;   // 6.5 لـ 14 حساس
+    int16_t  lastError  = 0;
+    uint8_t  lostCount  = 0;
+    uint32_t forceUntil = 0, dbgPrev = 0;
+    uint32_t timeout    = millis() + RT_LINE_TIMEOUT;
+
+    while (millis() < timeout) {
+        _qtr.readCalibrated(_qtrVals);
+
+        long sumW = 0, sumV = 0;
+        uint8_t darkL = 0, darkR = 0;
+        for (uint8_t i = 0; i < RT_QTR_N; i++) {
+            uint16_t v = _qtrVals[i];
+            if (v > RT_JUNCT_DARK_TH) {                 // غامق = على الخط
+                int sig = v - RT_JUNCT_DARK_TH;
+                sumW += (long)i * sig;
+                sumV += sig;
+                if (i < RT_LF2_OUTER_N)                  darkL++;   // الطرف اليسار
+                else if (i >= RT_QTR_N - RT_LF2_OUTER_N) darkR++;   // الطرف اليمين
+            }
+        }
+
+        // وصل المسافة؟
+        if (targetCounts && abs(_encL.read()) >= targetCounts) {
+            stop(); Serial.println(F("  → distance done")); return true;
+        }
+
+        // تقاطع = الطرفين غامقين معاً (عبور عمودي يعتّم الجهتين)
+        bool nowJunc = (darkL >= RT_LF2_OUTER_DARK) && (darkR >= RT_LF2_OUTER_DARK);
+        if (nowJunc && millis() > forceUntil + 300) {
+            forceUntil = millis() + RT_LF2_FORCE_MS;
+            Serial.println(F("  junction → force straight"));
+        }
+        bool forceStraight = (millis() < forceUntil);
+
+        if (millis() - dbgPrev >= 200) {
+            dbgPrev = millis();
+            int lp = (sumV > 0) ? (int)(sumW / sumV) : -1;
+            Serial.print(F("LF2 pos=")); Serial.print(lp);
+            Serial.print(F(" L=")); Serial.print(darkL);
+            Serial.print(F(" R=")); Serial.print(darkR);
+            Serial.print(F(" sV=")); Serial.print(sumV);
+            if (forceStraight) Serial.print(F(" STR"));
+            Serial.println();
+        }
+
+        // ضياع الخط
+        if (sumV == 0 && !forceStraight) {
+            if (++lostCount >= 25) { stop(); Serial.println(F("  LINE2 LOST")); return false; }
+            int rec = (lastError < 0) ? -RT_LINE_BASE / 2 : RT_LINE_BASE / 2;
+            setMotors(rec, -rec);       // دوّر باتجاه آخر مكان شفت فيه الخط
+            continue;
+        }
+        if (sumV > 0) lostCount = 0;
+
+        // PD (معطّل أثناء عبور التقاطع = يمشي مستقيم)
+        int correction = 0;
+        if (!forceStraight && sumV > 0) {
+            int16_t error = (int16_t)(((float)sumW / sumV - center) * 10.0f);
+            int16_t deriv = error - lastError;
+            lastError = error;
+            correction = (int)(RT_LF2_KP * error + RT_LF2_KD * deriv);
+        }
+        correction = constrain(correction, -(int)RT_LINE_BASE, (int)RT_LINE_BASE);
+
+        int c = RT_LINE_STEER_SIGN * correction;
+        int l = constrain((int)RT_LINE_BASE + c, RT_LINE_MIN, RT_LINE_MAX);
+        int r = constrain((int)RT_LINE_BASE - c, RT_LINE_MIN, RT_LINE_MAX);
+        setMotors(l, r);
+    }
+
+    stop();
+    Serial.println(F("  LINE2 timeout"));
     return false;
 }
 
