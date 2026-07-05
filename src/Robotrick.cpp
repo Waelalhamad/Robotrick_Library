@@ -17,7 +17,10 @@ Robotrick::Robotrick()
       _gzBias(0), _heading(0), _gyroRate(0), _lastMicros(0),
       _driveSpeed(RT_STRAIGHT_SPEED), _driveAccel(RT_STRAIGHT_ACCEL),
       _distKp(RT_DIST_KP), _distKd(RT_DIST_KD), _distKi(RT_DIST_KI),
-      _hdgKp(RT_STRAIGHT_KP), _hdgKd(RT_STRAIGHT_KD), _hdgDeadband(RT_STRAIGHT_DEADBAND) {}
+      _hdgKp(RT_STRAIGHT_KP), _hdgKd(RT_STRAIGHT_KD), _hdgDeadband(RT_STRAIGHT_DEADBAND),
+      _lineBase(RT_LINE_BASE), _lineMax(RT_LINE_MAX), _lineMin(RT_LINE_MIN),
+      _lineSlow(RT_LINE_SLOW), _lineDeadband(RT_LINE_DEADBAND),
+      _lineKp(RT_LINE_KP), _lineKd(RT_LINE_KD), _lineKpBoost(RT_LINE_KP_BOOST) {}
 
 // ─────────────────────────────────────────────────────
 //  SETUP
@@ -190,6 +193,52 @@ void Robotrick::printDriveTuning() {
     Serial.print(F("  hdg  Kp=")); Serial.print(_hdgKp, 3);
     Serial.print(F("  Kd=")); Serial.print(_hdgKd, 3);
     Serial.print(F("  dead=")); Serial.print(_hdgDeadband, 2); Serial.println(F("deg"));
+}
+
+// ── Line-follower tuning (لايف — بتأثّر على followLine مباشرة) ────
+void Robotrick::setLineSpeed(int base, int maxSpd, int minSpd) {
+    if (base   >= 0) _lineBase = constrain(base,   0, 255);
+    if (maxSpd >= 0) _lineMax  = constrain(maxSpd, 0, 255);
+    if (minSpd >= 0) _lineMin  = constrain(minSpd, 0, 255);
+    Serial.print(F("[Robotrick] lineSpeed base=")); Serial.print(_lineBase);
+    Serial.print(F("  max=")); Serial.print(_lineMax);
+    Serial.print(F("  min=")); Serial.println(_lineMin);
+}
+
+void Robotrick::setLinePD(float kp, float kd) {
+    if (kp >= 0) _lineKp = kp;
+    if (kd >= 0) _lineKd = kd;
+    Serial.print(F("[Robotrick] linePD  Kp=")); Serial.print(_lineKp, 4);
+    Serial.print(F("  Kd=")); Serial.println(_lineKd, 4);
+}
+
+void Robotrick::setLineTune(int deadband, float kpBoost, int slow) {
+    if (deadband >= 0) _lineDeadband = deadband;
+    if (kpBoost  >= 0) _lineKpBoost  = kpBoost;
+    if (slow     >= 0) _lineSlow     = constrain(slow, 0, 255);
+    Serial.print(F("[Robotrick] lineTune dead=")); Serial.print(_lineDeadband);
+    Serial.print(F("  boost=")); Serial.print(_lineKpBoost, 2);
+    Serial.print(F("  slow=")); Serial.println(_lineSlow);
+}
+
+void Robotrick::resetLineTuning() {
+    _lineBase = RT_LINE_BASE; _lineMax = RT_LINE_MAX; _lineMin = RT_LINE_MIN;
+    _lineSlow = RT_LINE_SLOW; _lineDeadband = RT_LINE_DEADBAND;
+    _lineKp = RT_LINE_KP; _lineKd = RT_LINE_KD; _lineKpBoost = RT_LINE_KP_BOOST;
+    Serial.println(F("[Robotrick] line tuning RESET to defaults"));
+    printLineTuning();
+}
+
+void Robotrick::printLineTuning() {
+    Serial.println(F("[Robotrick] --- line tuning ---"));
+    Serial.print(F("  speed base=")); Serial.print(_lineBase);
+    Serial.print(F("  max=")); Serial.print(_lineMax);
+    Serial.print(F("  min=")); Serial.print(_lineMin);
+    Serial.print(F("  slow=")); Serial.println(_lineSlow);
+    Serial.print(F("  Kp=")); Serial.print(_lineKp, 4);
+    Serial.print(F("  Kd=")); Serial.print(_lineKd, 4);
+    Serial.print(F("  boost=")); Serial.print(_lineKpBoost, 2);
+    Serial.print(F("  deadband=")); Serial.println(_lineDeadband);
 }
 
 void Robotrick::stop() {
@@ -730,7 +779,7 @@ bool Robotrick::_followLine(uint8_t nJunctions, float cm) {
                     // كمّل قدّام ليصير محور العجلات فوق التقاطع
                     resetEncoders();
                     long off = (long)(RT_LINE_JUNCT_OFFSET_CM / cmPerCount);
-                    setMotors(RT_LINE_BASE, RT_LINE_BASE);
+                    setMotors(_lineBase, _lineBase);
                     uint32_t offT = millis() + 2000;
                     while (abs(_encL.read()) < off && millis() < offT) {}
                     stop();
@@ -751,8 +800,8 @@ bool Robotrick::_followLine(uint8_t nJunctions, float cm) {
                 return false;
             }
             // استرداد: قوس ناعم باتجاه آخر انحراف
-            if (lastDir >= 0) setMotors(RT_LINE_BASE, RT_LINE_MIN);
-            else              setMotors(RT_LINE_MIN,  RT_LINE_BASE);
+            if (lastDir >= 0) setMotors(_lineBase, _lineMin);
+            else              setMotors(_lineMin,  _lineBase);
             continue;
         }
         lostSince = 0;
@@ -772,7 +821,7 @@ bool Robotrick::_followLine(uint8_t nJunctions, float cm) {
         float err  = posFilt - (float)RT_QTR_CENTER;  // موجب = الخط على اليمين
         lastDir = (err > 200) ? 1 : (err < -200 ? -1 : lastDir);
         // deadband: قريب من النص = امشي مستقيم (يمنع الرجّة)
-        if (err > -RT_LINE_DEADBAND && err < RT_LINE_DEADBAND) err = 0;
+        if (err > -_lineDeadband && err < _lineDeadband) err = 0;
         float dErr = (err - errPrev) / dt;
         errPrev = err;
 
@@ -781,18 +830,18 @@ bool Robotrick::_followLine(uint8_t nJunctions, float cm) {
         if (ratio > 1.0f) ratio = 1.0f;
 
         // gain scheduling: KP ناعم بالنص، يقوى عالكوع الحاد
-        float kpEff = RT_LINE_KP * (1.0f + RT_LINE_KP_BOOST * ratio * ratio);
-        float corr = RT_LINE_STEER_SIGN * (kpEff * err + RT_LINE_KD * dErr * 0.001f);
+        float kpEff = _lineKp * (1.0f + _lineKpBoost * ratio * ratio);
+        float corr = RT_LINE_STEER_SIGN * (kpEff * err + _lineKd * dErr * 0.001f);
 
         // curvature speed: بطّئ الأساس عالكوع الحاد ليلحق يلف بدل ما يطير
-        int base = RT_LINE_BASE - (int)((RT_LINE_BASE - RT_LINE_SLOW) * ratio);
+        int base = _lineBase - (int)((_lineBase - _lineSlow) * ratio);
 
         // تجاهل التقاطع: بأمر followLineForCM (nJunctions==0) اعبر التقاطع مستقيم
         // بدون تصحيح ولا تبطئة — يمنع "الجنون" عند الـ + و T
-        if (atJunction && nJunctions == 0) { corr = 0; base = RT_LINE_BASE; }
+        if (atJunction && nJunctions == 0) { corr = 0; base = _lineBase; }
 
-        int l = constrain((int)(base + corr), RT_LINE_MIN, RT_LINE_MAX);
-        int r = constrain((int)(base - corr), RT_LINE_MIN, RT_LINE_MAX);
+        int l = constrain((int)(base + corr), _lineMin, _lineMax);
+        int r = constrain((int)(base - corr), _lineMin, _lineMax);
         setMotors(l, r);
     }
 
@@ -865,7 +914,7 @@ bool Robotrick::followLine2(float cm) {
         // ضياع الخط
         if (sumV == 0 && !forceStraight) {
             if (++lostCount >= 25) { stop(); Serial.println(F("  LINE2 LOST")); return false; }
-            int rec = (lastError < 0) ? -RT_LINE_BASE / 2 : RT_LINE_BASE / 2;
+            int rec = (lastError < 0) ? -_lineBase / 2 : _lineBase / 2;
             setMotors(rec, -rec);       // دوّر باتجاه آخر مكان شفت فيه الخط
             continue;
         }
@@ -879,11 +928,11 @@ bool Robotrick::followLine2(float cm) {
             lastError = error;
             correction = (int)(RT_LF2_KP * error + RT_LF2_KD * deriv);
         }
-        correction = constrain(correction, -(int)RT_LINE_BASE, (int)RT_LINE_BASE);
+        correction = constrain(correction, -(int)_lineBase, (int)_lineBase);
 
         int c = RT_LINE_STEER_SIGN * correction;
-        int l = constrain((int)RT_LINE_BASE + c, RT_LINE_MIN, RT_LINE_MAX);
-        int r = constrain((int)RT_LINE_BASE - c, RT_LINE_MIN, RT_LINE_MAX);
+        int l = constrain((int)_lineBase + c, _lineMin, _lineMax);
+        int r = constrain((int)_lineBase - c, _lineMin, _lineMax);
         setMotors(l, r);
     }
 

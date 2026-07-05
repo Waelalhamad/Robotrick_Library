@@ -239,6 +239,13 @@ public:
     bool followLineToJunction(uint8_t nJunctions = 1);  // اتبع الخط لحد التقاطع الـ n
     bool followLineForCM(float cm);                // اتبع الخط لمسافة محددة
     bool followLine2(float cm);                    // خوارزمية بديلة (أسلوب MegaShield) للتجربة
+    // ── Line-follower tuning (عدّل لايف بدون recompile) ──
+    void setLineSpeed(int base, int maxSpd, int minSpd);  // سرعات العجلة (سالب = لا تغيّر)
+    void setLinePD(float kp, float kd);                   // PD التوجيه (سالب = لا تغيّر)
+    void setLineTune(int deadband, float kpBoost, int slow); // deadband/boost/سرعة الكوع (سالب = لا تغيّر)
+    void resetLineTuning();                               // رجّع كل قيم الخط للافتراضي
+    void printLineTuning();                               // اطبع القيم الحالية
+
     uint16_t linePosition();                       // 0..24000 (12000 = بالنص)
     void     lineReadRaw(uint16_t* dest25);        // قراءة خام (بدون calibration)
     uint16_t lineRead(uint16_t* dest25);           // قراءة calibrated + الموقع (65535 = مش معاير)
@@ -275,6 +282,10 @@ private:
     float _driveSpeed, _driveAccel;      // = RT_STRAIGHT_SPEED / RT_STRAIGHT_ACCEL
     float _distKp, _distKd, _distKi;     // = RT_DIST_KP / KD / KI
     float _hdgKp, _hdgKd, _hdgDeadband;  // = RT_STRAIGHT_KP / KD / DEADBAND (heading hold)
+
+    // line-follower tuning قابلة للتعديل لايف (تبدأ من قيم الـ CONFIG)
+    int   _lineBase, _lineMax, _lineMin, _lineSlow, _lineDeadband;
+    float _lineKp, _lineKd, _lineKpBoost;
 
     // line follower
     QTRSensors _qtr;

@@ -36,6 +36,11 @@
 //    HEADINGPD <kp> <kd> [d]-> bot.setHeadingPD(...)  (gyro straightness PD; neg = keep)
 //    DRIVETUNE              -> print current speed/PID + heading values
 //    DRIVERESET             -> restore speed/PID/heading to CONFIG defaults
+//    LINESPEED <b> <mx> <mn>-> bot.setLineSpeed(...)  (line wheel speeds; neg = keep)
+//    LINEPD <kp> <kd>       -> bot.setLinePD(...)     (line steering PD; neg = keep)
+//    LINETUNE <dead> <bst> <sl>-> bot.setLineTune(...) (deadband/boost/corner-slow)
+//    LINETUNEP              -> print current line-follower tuning
+//    LINERESET              -> restore line tuning to CONFIG defaults
 //    MAP             -> demo: TL90, FWD30, TL90, FWD50, STOP (blocking)
 //    TELEM <0|1>     -> disable/enable telemetry streaming (default ON)
 //    GET             -> print one telemetry line immediately
@@ -435,6 +440,52 @@ void handleLine(char* line) {
   if (strcmp(cmd, "DRIVERESET") == 0) {
     bot.resetDriveTuning();
     Serial.println(F("ACK DRIVERESET"));
+    return;
+  }
+
+  // ── LINESPEED <base> <max> <min> ── (سالب = لا تغيّر)
+  if (strcmp(cmd, "LINESPEED") == 0) {
+    long b, mx, mn;
+    if (!nextLong(&b))  b  = -1;
+    if (!nextLong(&mx)) mx = -1;
+    if (!nextLong(&mn)) mn = -1;
+    bot.setLineSpeed((int)b, (int)mx, (int)mn);
+    Serial.println(F("ACK LINESPEED"));
+    return;
+  }
+
+  // ── LINEPD <kp> <kd> ── (سالب = لا تغيّر)
+  if (strcmp(cmd, "LINEPD") == 0) {
+    float kp, kd;
+    if (!nextFloat(&kp)) kp = -1;
+    if (!nextFloat(&kd)) kd = -1;
+    bot.setLinePD(kp, kd);
+    Serial.println(F("ACK LINEPD"));
+    return;
+  }
+
+  // ── LINETUNE <deadband> <boost> <slow> ── (سالب = لا تغيّر)
+  if (strcmp(cmd, "LINETUNE") == 0) {
+    long dead, slow; float boost;
+    if (!nextLong(&dead))   dead  = -1;
+    if (!nextFloat(&boost)) boost = -1;
+    if (!nextLong(&slow))   slow  = -1;
+    bot.setLineTune((int)dead, boost, (int)slow);
+    Serial.println(F("ACK LINETUNE"));
+    return;
+  }
+
+  // ── LINETUNEP ── (اطبع قيم الخط)
+  if (strcmp(cmd, "LINETUNEP") == 0) {
+    bot.printLineTuning();
+    Serial.println(F("ACK LINETUNEP"));
+    return;
+  }
+
+  // ── LINERESET ── (رجّع قيم الخط للافتراضي)
+  if (strcmp(cmd, "LINERESET") == 0) {
+    bot.resetLineTuning();
+    Serial.println(F("ACK LINERESET"));
     return;
   }
 

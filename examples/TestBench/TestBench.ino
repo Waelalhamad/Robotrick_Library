@@ -52,6 +52,11 @@ void printMenu() {
     Serial.println(F("  t <kp> <kd> <ki>  PID المسافة (t 9 2 0)   T  اطبع القيم"));
     Serial.println(F("  H <kp> <kd> <dead>  استقامة الجايرو (H 1.8 0.6 1)"));
     Serial.println(F("  R        رجّع السرعة والـ PID والاستقامة للافتراضي (default)"));
+    Serial.println(F("  --- معايرة الخط (line) ---"));
+    Serial.println(F("  L <base> <max> <min>   سرعات الخط (L 50 100 30)"));
+    Serial.println(F("  K <kp> <kd>            PD الخط (K 0.03 0.06)"));
+    Serial.println(F("  G <dead> <boost> <slow>  إضافات (G 700 5 70)"));
+    Serial.println(F("  P  اطبع قيم الخط     Q  رجّع الخط للافتراضي"));
     Serial.println(F("  x        stop        ?  menu"));
     Serial.println(F("==================================="));
     Serial.print(F("> "));
@@ -194,6 +199,21 @@ void handle(char cmd, float val, float val2, float val3) {
     }
     else if (cmd == 'H') {   // استقامة الجايرو:  H <kp> <kd> <dead>  (سالب = لا تغيّرها)
         bot.setHeadingPD(val, val2, val3);
+    }
+    else if (cmd == 'L') {   // سرعات الخط:  L <base> <max> <min>
+        bot.setLineSpeed((int)val, (int)val2, (int)val3);
+    }
+    else if (cmd == 'K') {   // PD الخط:  K <kp> <kd>   (مثال K 0.03 0.06)
+        bot.setLinePD(val, val2);
+    }
+    else if (cmd == 'G') {   // إضافات الخط:  G <deadband> <boost> <slow>
+        bot.setLineTune((int)val, val2, (int)val3);
+    }
+    else if (cmd == 'P') {   // اطبع قيم الخط
+        bot.printLineTuning();
+    }
+    else if (cmd == 'Q') {   // رجّع قيم الخط للافتراضي
+        bot.resetLineTuning();
     }
     else if (cmd == 'x') {
         bot.stop();
