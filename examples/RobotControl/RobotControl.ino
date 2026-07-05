@@ -33,7 +33,9 @@
 //    DRIVESPEED <cm/s>      -> bot.setDriveSpeed(v)   (live cruise speed of forward/back)
 //    DRIVEACCEL <cm/s^2>    -> bot.setDriveAccel(v)
 //    DRIVEPID <kp> <kd> [ki]-> bot.setDrivePID(...)   (negative arg = keep current)
-//    DRIVETUNE              -> print current speed/PID values
+//    HEADINGPD <kp> <kd> [d]-> bot.setHeadingPD(...)  (gyro straightness PD; neg = keep)
+//    DRIVETUNE              -> print current speed/PID + heading values
+//    DRIVERESET             -> restore speed/PID/heading to CONFIG defaults
 //    MAP             -> demo: TL90, FWD30, TL90, FWD50, STOP (blocking)
 //    TELEM <0|1>     -> disable/enable telemetry streaming (default ON)
 //    GET             -> print one telemetry line immediately
@@ -416,6 +418,23 @@ void handleLine(char* line) {
   if (strcmp(cmd, "DRIVETUNE") == 0) {
     bot.printDriveTuning();
     Serial.println(F("ACK DRIVETUNE"));
+    return;
+  }
+
+  // ── HEADINGPD <kp> <kd> [dead] ── (استقامة الجايرو، لايف؛ سالب = لا تغيّرها)
+  if (strcmp(cmd, "HEADINGPD") == 0) {
+    float kp, kd, dead;
+    if (!nextFloat(&kp) || !nextFloat(&kd)) { Serial.println(F("ERR HEADINGPD needs <kp> <kd> [dead]")); return; }
+    if (!nextFloat(&dead)) dead = -1;   // -1 = اترك deadband كما هو
+    bot.setHeadingPD(kp, kd, dead);
+    Serial.println(F("ACK HEADINGPD"));
+    return;
+  }
+
+  // ── DRIVERESET ── (رجّع السرعة والـ PID والاستقامة للافتراضي)
+  if (strcmp(cmd, "DRIVERESET") == 0) {
+    bot.resetDriveTuning();
+    Serial.println(F("ACK DRIVERESET"));
     return;
   }
 

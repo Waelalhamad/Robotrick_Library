@@ -50,6 +50,8 @@ void printMenu() {
     Serial.println(F("  d <i>    فصل السيرفو (d 1)"));
     Serial.println(F("  w <cm/s> سرعة forward (w 25)"));
     Serial.println(F("  t <kp> <kd> <ki>  PID المسافة (t 9 2 0)   T  اطبع القيم"));
+    Serial.println(F("  H <kp> <kd> <dead>  استقامة الجايرو (H 1.8 0.6 1)"));
+    Serial.println(F("  R        رجّع السرعة والـ PID والاستقامة للافتراضي (default)"));
     Serial.println(F("  x        stop        ?  menu"));
     Serial.println(F("==================================="));
     Serial.print(F("> "));
@@ -186,6 +188,12 @@ void handle(char cmd, float val, float val2, float val3) {
     }
     else if (cmd == 'T') {   // اطبع قيم الـ tuning الحالية
         bot.printDriveTuning();
+    }
+    else if (cmd == 'R') {   // رجّع السرعة والـ PID للافتراضي
+        bot.resetDriveTuning();
+    }
+    else if (cmd == 'H') {   // استقامة الجايرو:  H <kp> <kd> <dead>  (سالب = لا تغيّرها)
+        bot.setHeadingPD(val, val2, val3);
     }
     else if (cmd == 'x') {
         bot.stop();

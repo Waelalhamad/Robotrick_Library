@@ -16,7 +16,8 @@ Robotrick::Robotrick()
       _encR(RT_ENC_R_A, RT_ENC_R_B),
       _gzBias(0), _heading(0), _gyroRate(0), _lastMicros(0),
       _driveSpeed(RT_STRAIGHT_SPEED), _driveAccel(RT_STRAIGHT_ACCEL),
-      _distKp(RT_DIST_KP), _distKd(RT_DIST_KD), _distKi(RT_DIST_KI) {}
+      _distKp(RT_DIST_KP), _distKd(RT_DIST_KD), _distKi(RT_DIST_KI),
+      _hdgKp(RT_STRAIGHT_KP), _hdgKd(RT_STRAIGHT_KD), _hdgDeadband(RT_STRAIGHT_DEADBAND) {}
 
 // ─────────────────────────────────────────────────────
 //  SETUP
@@ -154,15 +155,41 @@ void Robotrick::setDrivePID(float kp, float kd, float ki) {
     Serial.print(F("  Ki=")); Serial.println(_distKi, 3);
 }
 
+// رجّع كل شي لقيم الـ CONFIG (زر "default" للطلاب لو عبثوا بالقيم)
+void Robotrick::resetDriveTuning() {
+    _driveSpeed = RT_STRAIGHT_SPEED;
+    _driveAccel = RT_STRAIGHT_ACCEL;
+    _distKp     = RT_DIST_KP;
+    _distKd     = RT_DIST_KD;
+    _distKi     = RT_DIST_KI;
+    _hdgKp       = RT_STRAIGHT_KP;
+    _hdgKd       = RT_STRAIGHT_KD;
+    _hdgDeadband = RT_STRAIGHT_DEADBAND;
+    Serial.println(F("[Robotrick] drive tuning RESET to defaults"));
+    printDriveTuning();
+}
+
+void Robotrick::setHeadingPD(float kp, float kd, float deadband) {
+    _hdgKp       = (kp >= 0) ? kp : _hdgKp;
+    _hdgKd       = (kd >= 0) ? kd : _hdgKd;
+    _hdgDeadband = (deadband >= 0) ? deadband : _hdgDeadband;
+    Serial.print(F("[Robotrick] headingPD  Kp=")); Serial.print(_hdgKp, 3);
+    Serial.print(F("  Kd=")); Serial.print(_hdgKd, 3);
+    Serial.print(F("  dead=")); Serial.print(_hdgDeadband, 2); Serial.println(F("deg"));
+}
+
 float Robotrick::getDriveSpeed() { return _driveSpeed; }
 
 void Robotrick::printDriveTuning() {
     Serial.println(F("[Robotrick] --- drive tuning ---"));
     Serial.print(F("  speed = ")); Serial.print(_driveSpeed, 1); Serial.println(F(" cm/s"));
     Serial.print(F("  accel = ")); Serial.print(_driveAccel, 1); Serial.println(F(" cm/s^2"));
-    Serial.print(F("  Kp=")); Serial.print(_distKp, 3);
+    Serial.print(F("  dist Kp=")); Serial.print(_distKp, 3);
     Serial.print(F("  Kd=")); Serial.print(_distKd, 3);
     Serial.print(F("  Ki=")); Serial.println(_distKi, 3);
+    Serial.print(F("  hdg  Kp=")); Serial.print(_hdgKp, 3);
+    Serial.print(F("  Kd=")); Serial.print(_hdgKd, 3);
+    Serial.print(F("  dead=")); Serial.print(_hdgDeadband, 2); Serial.println(F("deg"));
 }
 
 void Robotrick::stop() {
@@ -260,8 +287,8 @@ void Robotrick::driveStraight(float cm, int dir) {
         // MODE 1 أو 3 → جايرو PD
         if (RT_STRAIGHT_MODE == 1 || RT_STRAIGHT_MODE == 3) {
             float herr = _heading;
-            if (herr > -RT_STRAIGHT_DEADBAND && herr < RT_STRAIGHT_DEADBAND) herr = 0;
-            corr += RT_STEER_SIGN * (RT_STRAIGHT_KP * herr + RT_STRAIGHT_KD * _gyroRate);
+            if (herr > -_hdgDeadband && herr < _hdgDeadband) herr = 0;
+            corr += RT_STEER_SIGN * (_hdgKp * herr + _hdgKd * _gyroRate);
         }
         // MODE 2 أو 3 → موازنة الإنكودر (نطبّع اليمين 4× لمقياس اليسار)
         // × dir: تصحيح الإنكودر ينعكس مع اتجاه الحركة (عكس الجايرو المطلق)

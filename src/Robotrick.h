@@ -222,6 +222,8 @@ public:
     void  setDriveSpeed(float cmPerSec);            // سرعة رحلة forward/backward (cm/s)
     void  setDriveAccel(float cmPerSec2);           // تسارع/تباطؤ الرحلة (cm/s^2)
     void  setDrivePID(float kp, float kd, float ki = 0); // PID ملاحقة المسافة
+    void  setHeadingPD(float kp, float kd, float deadband = -1); // استقامة الجايرو (PD)
+    void  resetDriveTuning();                       // رجّع السرعة والـ PID والاستقامة لقيم CONFIG
     float getDriveSpeed();                          // السرعة الحالية (cm/s)
     void  printDriveTuning();                       // اطبع القيم الحالية
 
@@ -272,6 +274,7 @@ private:
     // drive tuning قابلة للتعديل لايف (تبدأ من قيم الـ CONFIG)
     float _driveSpeed, _driveAccel;      // = RT_STRAIGHT_SPEED / RT_STRAIGHT_ACCEL
     float _distKp, _distKd, _distKi;     // = RT_DIST_KP / KD / KI
+    float _hdgKp, _hdgKd, _hdgDeadband;  // = RT_STRAIGHT_KP / KD / DEADBAND (heading hold)
 
     // line follower
     QTRSensors _qtr;
