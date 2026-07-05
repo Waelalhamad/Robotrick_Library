@@ -14,7 +14,9 @@
 Robotrick::Robotrick()
     : _encL(RT_ENC_L_A, RT_ENC_L_B),
       _encR(RT_ENC_R_A, RT_ENC_R_B),
-      _gzBias(0), _heading(0), _gyroRate(0), _lastMicros(0) {}
+      _gzBias(0), _heading(0), _gyroRate(0), _lastMicros(0),
+      _driveSpeed(RT_STRAIGHT_SPEED), _driveAccel(RT_STRAIGHT_ACCEL),
+      _distKp(RT_DIST_KP), _distKd(RT_DIST_KD), _distKi(RT_DIST_KI) {}
 
 // ─────────────────────────────────────────────────────
 //  SETUP
@@ -130,6 +132,39 @@ void Robotrick::backward(float cm) { driveStraight(cm, -1); }
 void Robotrick::turnLeft(float deg)  { turn(+fabs(deg)); }
 void Robotrick::turnRight(float deg) { turn(-fabs(deg)); }
 
+// ── Drive tuning (لايف — بتأثّر على forward/backward مباشرة) ──────
+void Robotrick::setDriveSpeed(float cmPerSec) {
+    _driveSpeed = constrain(cmPerSec, 1.0f, 100.0f);   // 0 يوقف الحركة → أدنى 1
+    Serial.print(F("[Robotrick] driveSpeed = ")); Serial.print(_driveSpeed, 1);
+    Serial.println(F(" cm/s"));
+}
+
+void Robotrick::setDriveAccel(float cmPerSec2) {
+    _driveAccel = constrain(cmPerSec2, 1.0f, 400.0f);
+    Serial.print(F("[Robotrick] driveAccel = ")); Serial.print(_driveAccel, 1);
+    Serial.println(F(" cm/s^2"));
+}
+
+void Robotrick::setDrivePID(float kp, float kd, float ki) {
+    _distKp = (kp >= 0) ? kp : _distKp;
+    _distKd = (kd >= 0) ? kd : _distKd;
+    _distKi = (ki >= 0) ? ki : _distKi;
+    Serial.print(F("[Robotrick] drivePID  Kp=")); Serial.print(_distKp, 3);
+    Serial.print(F("  Kd=")); Serial.print(_distKd, 3);
+    Serial.print(F("  Ki=")); Serial.println(_distKi, 3);
+}
+
+float Robotrick::getDriveSpeed() { return _driveSpeed; }
+
+void Robotrick::printDriveTuning() {
+    Serial.println(F("[Robotrick] --- drive tuning ---"));
+    Serial.print(F("  speed = ")); Serial.print(_driveSpeed, 1); Serial.println(F(" cm/s"));
+    Serial.print(F("  accel = ")); Serial.print(_driveAccel, 1); Serial.println(F(" cm/s^2"));
+    Serial.print(F("  Kp=")); Serial.print(_distKp, 3);
+    Serial.print(F("  Kd=")); Serial.print(_distKd, 3);
+    Serial.print(F("  Ki=")); Serial.println(_distKi, 3);
+}
+
 void Robotrick::stop() {
     analogWrite(RT_L_PWM, 0);
     analogWrite(RT_R_PWM, 0);
@@ -153,7 +188,7 @@ void Robotrick::driveStraight(float cm, int dir) {
     if (S < 0.05f) return;
 
     // ── plan trapezoid (magnitude) ────────────────────
-    float vmax = RT_STRAIGHT_SPEED, a = RT_STRAIGHT_ACCEL, d = RT_STRAIGHT_ACCEL;
+    float vmax = _driveSpeed, a = _driveAccel, d = _driveAccel;
     float accelD = vmax * vmax / (2 * a);
     float decelD = vmax * vmax / (2 * d);
     float vpeak, t1, t2, t3, sT1, sT2;
@@ -207,15 +242,15 @@ void Robotrick::driveStraight(float cm, int dir) {
         float posErr = sRef - pos;
         float velErr = vRef - velFilt;
         float ff = (vRef > 0.01f) ? (RT_PWM_STATIC + RT_KV * vRef) : 0;
-        float p  = RT_DIST_KP * posErr;
-        float dd = RT_DIST_KD * velErr;
-        if (RT_DIST_KI > 0) {                             // anti-windup integrator
+        float p  = _distKp * posErr;
+        float dd = _distKd * velErr;
+        if (_distKi > 0) {                                // anti-windup integrator
             float u_pd = ff + p + dd;
             bool sat = (u_pd >= 255 || u_pd <= -255);
             if (!(sat && (posErr > 0)))
-                integ = constrain(integ + posErr * dt, -255.0f / RT_DIST_KI, 255.0f / RT_DIST_KI);
+                integ = constrain(integ + posErr * dt, -255.0f / _distKi, 255.0f / _distKi);
         }
-        float baseMag = ff + p + RT_DIST_KI * integ + dd;
+        float baseMag = ff + p + _distKi * integ + dd;
         // أرضية: إذا لسا ما وصل، لازم PWM كافٍ يتحرّك (يمنع التوقف القصير)
         if (posErr > RT_POS_TOL && baseMag < RT_PWM_STATIC) baseMag = RT_PWM_STATIC;
         baseMag = constrain(baseMag, 0.0f, 255.0f);

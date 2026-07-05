@@ -30,6 +30,10 @@
 //    SERVO <i> <a>          -> bot.servoWrite(i,a)   (jump to angle 0..180, non-blocking)
 //    SERVOMOVE <i> <a> [dps]-> bot.servoMove(i,a,dps) (smooth sweep, blocking; DONE)
 //    SERVODETACH <i>        -> bot.servoDetach(i)    (release servo, stops jitter)
+//    DRIVESPEED <cm/s>      -> bot.setDriveSpeed(v)   (live cruise speed of forward/back)
+//    DRIVEACCEL <cm/s^2>    -> bot.setDriveAccel(v)
+//    DRIVEPID <kp> <kd> [ki]-> bot.setDrivePID(...)   (negative arg = keep current)
+//    DRIVETUNE              -> print current speed/PID values
 //    MAP             -> demo: TL90, FWD30, TL90, FWD50, STOP (blocking)
 //    TELEM <0|1>     -> disable/enable telemetry streaming (default ON)
 //    GET             -> print one telemetry line immediately
@@ -377,6 +381,41 @@ void handleLine(char* line) {
     if (!nextLong(&idx)) { Serial.println(F("ERR SERVODETACH needs <idx>")); return; }
     bot.servoDetach((uint8_t)idx);
     Serial.println(F("ACK SERVODETACH"));
+    return;
+  }
+
+  // ── DRIVESPEED <cm/s> ── (سرعة forward/backward، لايف)
+  if (strcmp(cmd, "DRIVESPEED") == 0) {
+    float v;
+    if (!nextFloat(&v)) { Serial.println(F("ERR DRIVESPEED needs <cm/s>")); return; }
+    bot.setDriveSpeed(v);
+    Serial.println(F("ACK DRIVESPEED"));
+    return;
+  }
+
+  // ── DRIVEACCEL <cm/s^2> ──
+  if (strcmp(cmd, "DRIVEACCEL") == 0) {
+    float v;
+    if (!nextFloat(&v)) { Serial.println(F("ERR DRIVEACCEL needs <cm/s^2>")); return; }
+    bot.setDriveAccel(v);
+    Serial.println(F("ACK DRIVEACCEL"));
+    return;
+  }
+
+  // ── DRIVEPID <kp> <kd> [ki] ── (سالب = لا تغيّرها)
+  if (strcmp(cmd, "DRIVEPID") == 0) {
+    float kp, kd, ki;
+    if (!nextFloat(&kp) || !nextFloat(&kd)) { Serial.println(F("ERR DRIVEPID needs <kp> <kd> [ki]")); return; }
+    if (!nextFloat(&ki)) ki = -1;   // -1 = اترك Ki كما هو
+    bot.setDrivePID(kp, kd, ki);
+    Serial.println(F("ACK DRIVEPID"));
+    return;
+  }
+
+  // ── DRIVETUNE ── (اطبع قيم السرعة/PID الحالية)
+  if (strcmp(cmd, "DRIVETUNE") == 0) {
+    bot.printDriveTuning();
+    Serial.println(F("ACK DRIVETUNE"));
     return;
   }
 

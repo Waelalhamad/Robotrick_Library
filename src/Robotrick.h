@@ -218,6 +218,13 @@ public:
                                 // wheel: 'L' أو 'R' (اللي تتحرك) — deg موجب=قدام، سالب=خلف
     void stop();                // وقوف
 
+    // ── Drive tuning (عدّل سرعة forward والـ PID لايف بدون recompile) ──
+    void  setDriveSpeed(float cmPerSec);            // سرعة رحلة forward/backward (cm/s)
+    void  setDriveAccel(float cmPerSec2);           // تسارع/تباطؤ الرحلة (cm/s^2)
+    void  setDrivePID(float kp, float kd, float ki = 0); // PID ملاحقة المسافة
+    float getDriveSpeed();                          // السرعة الحالية (cm/s)
+    void  printDriveTuning();                       // اطبع القيم الحالية
+
     // ── Sensors ────────────────────────────────────
     float heading();            // الزاوية الحالية (deg)
     void  resetHeading();       // صفّر الزاوية
@@ -261,6 +268,10 @@ private:
     float   _heading;
     float   _gyroRate;     // سرعة الدوران الحالية (deg/s) — للتخميد D
     uint32_t _lastMicros;
+
+    // drive tuning قابلة للتعديل لايف (تبدأ من قيم الـ CONFIG)
+    float _driveSpeed, _driveAccel;      // = RT_STRAIGHT_SPEED / RT_STRAIGHT_ACCEL
+    float _distKp, _distKd, _distKi;     // = RT_DIST_KP / KD / KI
 
     // line follower
     QTRSensors _qtr;

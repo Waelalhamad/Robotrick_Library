@@ -48,6 +48,8 @@ void printMenu() {
     Serial.println(F("  u <ms>   liftUp مدة ms       i <ms>  liftDown"));
     Serial.println(F("  s <i> <a>  servo فوري (s 1 90)   v <i> <a>  servo ناعم"));
     Serial.println(F("  d <i>    فصل السيرفو (d 1)"));
+    Serial.println(F("  w <cm/s> سرعة forward (w 25)"));
+    Serial.println(F("  t <kp> <kd> <ki>  PID المسافة (t 9 2 0)   T  اطبع القيم"));
     Serial.println(F("  x        stop        ?  menu"));
     Serial.println(F("==================================="));
     Serial.print(F("> "));
@@ -70,7 +72,7 @@ void reportMove() {
     Serial.println(F("  >> قِس المسافة/الزاوية الفعلية بالمسطرة وقلّي القيمة"));
 }
 
-void handle(char cmd, float val, float val2) {
+void handle(char cmd, float val, float val2, float val3) {
     if (cmd == 'g') {
         bot.calibrateGyro();
     }
@@ -176,6 +178,15 @@ void handle(char cmd, float val, float val2) {
         Serial.print(F(">> servo detach ")); Serial.println((int)val);
         bot.servoDetach((uint8_t)val);
     }
+    else if (cmd == 'w') {   // سرعة forward:  w <cm/s>
+        bot.setDriveSpeed(val);
+    }
+    else if (cmd == 't') {   // PID المسافة:  t <kp> <kd> <ki>  (سالب = لا تغيّرها؛ ki اختياري)
+        bot.setDrivePID(val, val2, val3);
+    }
+    else if (cmd == 'T') {   // اطبع قيم الـ tuning الحالية
+        bot.printDriveTuning();
+    }
     else if (cmd == 'x') {
         bot.stop();
         bot.motor4Stop();
@@ -212,20 +223,19 @@ void loop() {
             buf[idx] = '\0';
             if (idx > 0) {
                 char cmd = buf[0];
-                float val = 0, val2 = 0;
-                // أول رقمين بعد الأمر (لو موجودين) — مثال: s 1 90
-                uint8_t i = 1;
+                float v[3] = {0, 0, 0};
+                // حتى 3 أرقام بعد الأمر — مثال: s 1 90 / t 9 2 0
+                uint8_t i = 1, n = 0;
                 #define IS_NUM(c) (((c) >= '0' && (c) <= '9') || (c) == '-' || (c) == '.')
-                while (i < idx && !IS_NUM(buf[i])) i++;
-                if (i < idx) {
-                    val = atof(&buf[i]);
-                    while (i < idx && IS_NUM(buf[i])) i++;   // تجاوز الرقم الأول
+                while (i < idx && n < 3) {
                     while (i < idx && !IS_NUM(buf[i])) i++;   // تجاوز الفراغ
-                    if (i < idx) val2 = atof(&buf[i]);
+                    if (i >= idx) break;
+                    v[n++] = atof(&buf[i]);
+                    while (i < idx && IS_NUM(buf[i])) i++;    // تجاوز الرقم
                 }
                 #undef IS_NUM
                 Serial.println(buf);   // echo
-                handle(cmd, val, val2);
+                handle(cmd, v[0], v[1], v[2]);
             }
             idx = 0;
         }
