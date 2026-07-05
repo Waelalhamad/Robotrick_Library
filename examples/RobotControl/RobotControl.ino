@@ -27,6 +27,9 @@
 //    M4 <speed>      -> bot.motor4(speed)      (lift/mechanism motor, -255..255)
 //    M4FOR <sp> <ms> -> bot.motor4For(sp,ms)   (run motor 4 for a time, then stop)
 //    M4STOP          -> bot.motor4Stop()
+//    SERVO <i> <a>          -> bot.servoWrite(i,a)   (jump to angle 0..180, non-blocking)
+//    SERVOMOVE <i> <a> [dps]-> bot.servoMove(i,a,dps) (smooth sweep, blocking; DONE)
+//    SERVODETACH <i>        -> bot.servoDetach(i)    (release servo, stops jitter)
 //    MAP             -> demo: TL90, FWD30, TL90, FWD50, STOP (blocking)
 //    TELEM <0|1>     -> disable/enable telemetry streaming (default ON)
 //    GET             -> print one telemetry line immediately
@@ -322,6 +325,58 @@ void handleLine(char* line) {
   if (strcmp(cmd, "M4STOP") == 0) {
     bot.motor4Stop();
     Serial.println(F("ACK M4STOP"));
+    return;
+  }
+
+  // ── LIFTUP <ms> ── (raise lift for a time; blocking)
+  if (strcmp(cmd, "LIFTUP") == 0) {
+    long ms;
+    if (!nextLong(&ms)) { Serial.println(F("ERR LIFTUP needs <ms>")); return; }
+    Serial.println(F("ACK LIFTUP"));
+    busy = true; bot.liftUp((uint32_t)ms); busy = false;
+    Serial.println(F("DONE LIFTUP"));
+    return;
+  }
+
+  // ── LIFTDOWN <ms> ──
+  if (strcmp(cmd, "LIFTDOWN") == 0) {
+    long ms;
+    if (!nextLong(&ms)) { Serial.println(F("ERR LIFTDOWN needs <ms>")); return; }
+    Serial.println(F("ACK LIFTDOWN"));
+    busy = true; bot.liftDown((uint32_t)ms); busy = false;
+    Serial.println(F("DONE LIFTDOWN"));
+    return;
+  }
+
+  // ── SERVO <idx> <angle> ── (jump instantly, non-blocking)
+  if (strcmp(cmd, "SERVO") == 0) {
+    long idx, ang;
+    if (!nextLong(&idx) || !nextLong(&ang)) { Serial.println(F("ERR SERVO needs <idx> <angle>")); return; }
+    bot.servoWrite((uint8_t)idx, (int)ang);
+    Serial.println(F("ACK SERVO"));
+    return;
+  }
+
+  // ── SERVOMOVE <idx> <angle> <degPerSec> ── (smooth sweep, blocking)
+  if (strcmp(cmd, "SERVOMOVE") == 0) {
+    long idx, ang, spd;
+    if (!nextLong(&idx) || !nextLong(&ang)) { Serial.println(F("ERR SERVOMOVE needs <idx> <angle> [degPerSec]")); return; }
+    if (!nextLong(&spd)) spd = 0;   // 0 → السرعة الافتراضية بالمكتبة
+    Serial.println(F("ACK SERVOMOVE"));
+    busy = true;
+    if (spd > 0) bot.servoMove((uint8_t)idx, (int)ang, (uint16_t)spd);
+    else         bot.servoMove((uint8_t)idx, (int)ang);
+    busy = false;
+    Serial.println(F("DONE SERVOMOVE"));
+    return;
+  }
+
+  // ── SERVODETACH <idx> ──
+  if (strcmp(cmd, "SERVODETACH") == 0) {
+    long idx;
+    if (!nextLong(&idx)) { Serial.println(F("ERR SERVODETACH needs <idx>")); return; }
+    bot.servoDetach((uint8_t)idx);
+    Serial.println(F("ACK SERVODETACH"));
     return;
   }
 

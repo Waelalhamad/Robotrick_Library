@@ -34,6 +34,8 @@ bool Robotrick::begin(uint32_t baud) {
     digitalWrite(RT_M4_EN, HIGH);
     analogWrite(RT_M4_PWM, 0);
 
+    _servoBegin();   // سجّل بنات السيرفو (يتفعّلوا أول ما تستعملهم)
+
     bool ok = _gyroInit();
     if (!ok) {
         Serial.println(F("[Robotrick] ERROR: gyro not found! check wiring (0x6B)"));
@@ -388,6 +390,105 @@ void Robotrick::motor4For(int speed, uint32_t ms) {
     uint32_t endAt = millis() + ms;
     while (millis() < endAt) {}
     motor4Stop();
+}
+
+// رفع/تنزيل الرافعة — الاتجاه من RT_LIFT_UP_SIGN
+void Robotrick::liftUp(uint32_t ms) {
+    Serial.print(F("[Robotrick] LIFT UP ")); Serial.print(ms); Serial.println(F("ms"));
+    motor4For(RT_LIFT_UP_SIGN * RT_LIFT_SPEED, ms);
+}
+void Robotrick::liftDown(uint32_t ms) {
+    Serial.print(F("[Robotrick] LIFT DOWN ")); Serial.print(ms); Serial.println(F("ms"));
+    motor4For(-RT_LIFT_UP_SIGN * RT_LIFT_SPEED, ms);
+}
+
+// ─────────────────────────────────────────────────────
+//  SERVOS — 3 سيرفو على A2/A3/A4، رقمها 1..3
+//  attach كسول: السيرفو ما بينشغل إلا أول ما تكتب له زاوية،
+//  عشان ما ياخد timer/عزم قبل ما نحتاجه.
+// ─────────────────────────────────────────────────────
+void Robotrick::_servoBegin() {
+    _servoPin[0] = RT_SERVO1_PIN;
+    _servoPin[1] = RT_SERVO2_PIN;
+    _servoPin[2] = RT_SERVO3_PIN;
+    for (uint8_t i = 0; i < RT_SERVO_N; i++) {
+        _servoPos[i]      = -1;      // لسا ما تحرّك
+        _servoAttached[i] = false;
+    }
+}
+
+// فعّل السيرفو i (index داخلي 0..N-1) لو مش مفعّل. true = جاهز
+bool Robotrick::_servoEnsure(uint8_t i) {
+    if (i >= RT_SERVO_N) return false;
+    if (!_servoAttached[i]) {
+        _servo[i].attach(_servoPin[i], RT_SERVO_MIN_US, RT_SERVO_MAX_US);
+        _servoAttached[i] = true;
+    }
+    return true;
+}
+
+void Robotrick::servoWrite(uint8_t idx, int angle) {
+    if (idx < 1 || idx > RT_SERVO_N) {
+        Serial.println(F("[Robotrick] servo idx لازم 1..3")); return;
+    }
+    uint8_t i = idx - 1;
+    angle = constrain(angle, RT_SERVO_MIN_DEG, RT_SERVO_MAX_DEG);
+    if (!_servoEnsure(i)) return;
+    _servo[i].write(angle);
+    _servoPos[i] = angle;
+    Serial.print(F("[Robotrick] servo ")); Serial.print(idx);
+    Serial.print(F(" -> ")); Serial.print(angle); Serial.println(F("°"));
+}
+
+void Robotrick::servoMove(uint8_t idx, int angle, uint16_t degPerSec) {
+    if (idx < 1 || idx > RT_SERVO_N) {
+        Serial.println(F("[Robotrick] servo idx لازم 1..3")); return;
+    }
+    uint8_t i = idx - 1;
+    angle = constrain(angle, RT_SERVO_MIN_DEG, RT_SERVO_MAX_DEG);
+    if (!_servoEnsure(i)) return;
+
+    int from = _servoPos[i];
+    // أول حركة أو سرعة 0 → روح فوراً
+    if (from < 0 || degPerSec == 0) {
+        _servo[i].write(angle);
+        _servoPos[i] = angle;
+        Serial.print(F("[Robotrick] servo ")); Serial.print(idx);
+        Serial.print(F(" -> ")); Serial.print(angle); Serial.println(F("° (فوري)"));
+        return;
+    }
+
+    uint16_t msPerDeg = 1000UL / degPerSec;
+    if (msPerDeg < 1) msPerDeg = 1;      // سقف سرعة عملي
+    int step = (angle >= from) ? 1 : -1;
+    for (int a = from; a != angle; a += step) {
+        _servo[i].write(a);
+        delay(msPerDeg);
+    }
+    _servo[i].write(angle);
+    _servoPos[i] = angle;
+    Serial.print(F("[Robotrick] servo ")); Serial.print(idx);
+    Serial.print(F(" ~> ")); Serial.print(angle);
+    Serial.print(F("° @ ")); Serial.print(degPerSec); Serial.println(F(" deg/s"));
+}
+
+void Robotrick::servoDetach(uint8_t idx) {
+    if (idx < 1 || idx > RT_SERVO_N) return;
+    uint8_t i = idx - 1;
+    if (_servoAttached[i]) {
+        _servo[i].detach();
+        _servoAttached[i] = false;
+        Serial.print(F("[Robotrick] servo ")); Serial.print(idx); Serial.println(F(" detached"));
+    }
+}
+
+void Robotrick::servoAttachAll() {
+    for (uint8_t i = 0; i < RT_SERVO_N; i++) _servoEnsure(i);
+}
+
+int Robotrick::servoAngle(uint8_t idx) {
+    if (idx < 1 || idx > RT_SERVO_N) return -1;
+    return _servoPos[idx - 1];
 }
 
 // جهة اليسار: speed موجب = forward

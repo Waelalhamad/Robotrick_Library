@@ -45,6 +45,9 @@ void printMenu() {
     Serial.println(F("  n <cm>   LINE2 خوارزمية بديلة         (n 40)"));
     Serial.println(F("  q        square: (fwd30 + left90) x4"));
     Serial.println(F("  4 <spd>  motor4 (رافعة) بسرعة spd (-255..255، 0=وقوف)"));
+    Serial.println(F("  u <ms>   liftUp مدة ms       i <ms>  liftDown"));
+    Serial.println(F("  s <i> <a>  servo فوري (s 1 90)   v <i> <a>  servo ناعم"));
+    Serial.println(F("  d <i>    فصل السيرفو (d 1)"));
     Serial.println(F("  x        stop        ?  menu"));
     Serial.println(F("==================================="));
     Serial.print(F("> "));
@@ -67,7 +70,7 @@ void reportMove() {
     Serial.println(F("  >> قِس المسافة/الزاوية الفعلية بالمسطرة وقلّي القيمة"));
 }
 
-void handle(char cmd, float val) {
+void handle(char cmd, float val, float val2) {
     if (cmd == 'g') {
         bot.calibrateGyro();
     }
@@ -151,6 +154,28 @@ void handle(char cmd, float val) {
         Serial.print(F(">> motor4 speed=")); Serial.println((int)val);
         bot.motor4((int)val);   // 0 = وقوف
     }
+    else if (cmd == 'u') {
+        Serial.print(F(">> lift UP ")); Serial.print((uint32_t)val); Serial.println(F("ms"));
+        bot.liftUp((uint32_t)val);
+    }
+    else if (cmd == 'i') {
+        Serial.print(F(">> lift DOWN ")); Serial.print((uint32_t)val); Serial.println(F("ms"));
+        bot.liftDown((uint32_t)val);
+    }
+    else if (cmd == 's') {   // servo فوري:  s <idx> <angle>
+        Serial.print(F(">> servo ")); Serial.print((int)val);
+        Serial.print(F(" -> ")); Serial.println((int)val2);
+        bot.servoWrite((uint8_t)val, (int)val2);
+    }
+    else if (cmd == 'v') {   // servo ناعم:  v <idx> <angle>  (بالسرعة الافتراضية)
+        Serial.print(F(">> servo (smooth) ")); Serial.print((int)val);
+        Serial.print(F(" ~> ")); Serial.println((int)val2);
+        bot.servoMove((uint8_t)val, (int)val2);
+    }
+    else if (cmd == 'd') {   // فصل السيرفو:  d <idx>
+        Serial.print(F(">> servo detach ")); Serial.println((int)val);
+        bot.servoDetach((uint8_t)val);
+    }
     else if (cmd == 'x') {
         bot.stop();
         bot.motor4Stop();
@@ -187,16 +212,20 @@ void loop() {
             buf[idx] = '\0';
             if (idx > 0) {
                 char cmd = buf[0];
-                float val = 0;
-                // أول رقم بعد الأمر (لو موجود)
-                for (uint8_t i = 1; i < idx; i++) {
-                    if ((buf[i] >= '0' && buf[i] <= '9') || buf[i] == '-' || buf[i] == '.') {
-                        val = atof(&buf[i]);
-                        break;
-                    }
+                float val = 0, val2 = 0;
+                // أول رقمين بعد الأمر (لو موجودين) — مثال: s 1 90
+                uint8_t i = 1;
+                #define IS_NUM(c) (((c) >= '0' && (c) <= '9') || (c) == '-' || (c) == '.')
+                while (i < idx && !IS_NUM(buf[i])) i++;
+                if (i < idx) {
+                    val = atof(&buf[i]);
+                    while (i < idx && IS_NUM(buf[i])) i++;   // تجاوز الرقم الأول
+                    while (i < idx && !IS_NUM(buf[i])) i++;   // تجاوز الفراغ
+                    if (i < idx) val2 = atof(&buf[i]);
                 }
+                #undef IS_NUM
                 Serial.println(buf);   // echo
-                handle(cmd, val);
+                handle(cmd, val, val2);
             }
             idx = 0;
         }

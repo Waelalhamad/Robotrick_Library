@@ -19,6 +19,7 @@
 #include <Encoder.h>
 #include <QTRSensors.h>
 #include <EEPROM.h>
+#include <Servo.h>
 
 // ─────────────────────────────────────────────────────
 //  ███  CONFIG — عدّل من هون فقط  ███
@@ -38,6 +39,8 @@
 #define RT_M4_EN    14
 #define RT_M4_REVERSE  false   // اقلب لو الرافعة بتتحرك بالاتجاه المعكوس
 // ملاحظة: انكودر M4 على D0/D1 (Serial) — ما نستعمله؛ التحكّم بالوقت.
+#define RT_LIFT_SPEED   200    // سرعة liftUp/liftDown (0..255)
+#define RT_LIFT_UP_SIGN   1    // إذا liftUp بينزل بدل ما يرفع → خليها -1
 
 // عكس اتجاه كل جهة (المحركات متقابلة فيزيائياً)
 // إذا محرك لف غلط — اقلب قيمته.
@@ -175,6 +178,20 @@
 #define RT_GYRO_SENS    0.00875f  // dps per LSB
 #define RT_GYRO_DEADBAND 1.5f     // تجاهل الضوضاء الصغيرة
 
+// ── Servos (حتى 3 سيرفو — رقمها 1 و 2 و 3) ─────────
+#define RT_SERVO_N          3
+#define RT_SERVO1_PIN      A2
+#define RT_SERVO2_PIN      A3
+#define RT_SERVO3_PIN      A4
+// حدود نبضة السيرفو (µs) — عايرها لو السيرفو ما بيوصل 0/180 صح
+#define RT_SERVO_MIN_US   544     // نبضة أقل زاوية (افتراضي مكتبة Servo)
+#define RT_SERVO_MAX_US  2400     // نبضة أعلى زاوية
+// حدود الزاوية المسموحة (حماية ميكانيكية — لو السيرفو بيصطدم قبل 0/180)
+#define RT_SERVO_MIN_DEG    0
+#define RT_SERVO_MAX_DEG  180
+// سرعة الحركة الناعمة الافتراضية (درجة/ثانية) — 0 = فوري
+#define RT_SERVO_SPEED    120
+
 // ── Safety timeouts (ms) ───────────────────────────
 #define RT_MOVE_TIMEOUT  20000
 #define RT_TURN_TIMEOUT   5000
@@ -221,6 +238,16 @@ public:
     void  motor4(int speed);                 // -255..255، 0 = وقوف (non-blocking)
     void  motor4For(int speed, uint32_t ms); // شغّله مدة (ms) ثم يوقف (blocking)
     void  motor4Stop();
+    void  liftUp(uint32_t ms);               // ارفع الرافعة مدة (ms) — blocking
+    void  liftDown(uint32_t ms);             // نزّل الرافعة مدة (ms) — blocking
+
+    // ── Servos (idx = 1..3 على البنات A2/A3/A4) ────
+    void  servoWrite(uint8_t idx, int angle);                    // روح للزاوية فوراً (0..180)
+    void  servoMove(uint8_t idx, int angle,
+                    uint16_t degPerSec = RT_SERVO_SPEED);        // حركة ناعمة بسرعة معيّنة (blocking)
+    void  servoDetach(uint8_t idx);                              // حرّر السيرفو (يوقف الطنين/العزم)
+    void  servoAttachAll();                                      // فعّل السيرفوهات الثلاثة
+    int   servoAngle(uint8_t idx);                               // آخر زاوية مكتوبة (-1 = غير مفعّل)
 
     // ── Low-level (لو احتجت تتحكم يدوي) ────────────
     void  setMotors(int left, int right);   // -255..255 لكل جهة
@@ -242,6 +269,14 @@ private:
     bool       _qtrPinsInit = false;  // صارت تهيئة البنات؟
     void _lineBegin();                // تهيئة بنات الـ QTR (مرة واحدة)
     bool _followLine(uint8_t nJunctions, float cm);  // المحرك المشترك
+
+    // servos
+    Servo    _servo[RT_SERVO_N];
+    uint8_t  _servoPin[RT_SERVO_N];
+    int16_t  _servoPos[RT_SERVO_N];   // آخر زاوية (-1 = ما تحرّك بعد)
+    bool     _servoAttached[RT_SERVO_N];
+    void     _servoBegin();           // سجّل البنات (بدون attach — كسول)
+    bool     _servoEnsure(uint8_t i); // فعّل السيرفو i لو مش مفعّل؛ true=جاهز
 
     long  countsForCM(float cm);
     void  driveStraight(float cm, int dir);   // dir: +1 forward, -1 back
