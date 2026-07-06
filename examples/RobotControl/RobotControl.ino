@@ -43,6 +43,10 @@
 //    LINETUNE <dead> <bst> <sl>-> bot.setLineTune(...) (deadband/boost/corner-slow)
 //    LINETUNEP              -> print current line-follower tuning
 //    LINERESET              -> restore line tuning to CONFIG defaults
+//    TURNSPEED <f> <mx> <mn>-> bot.setTurnSpeed(...)  (turn speeds; neg = keep)
+//    TURNTUNE <kp> <fastDeg>-> bot.setTurnTune(...)   (landing gain + slow-start angle)
+//    TURNTUNEP              -> print current turn tuning
+//    TURNRESET              -> restore turn tuning to CONFIG defaults
 //    MAP             -> demo: TL90, FWD30, TL90, FWD50, STOP (blocking)
 //    TELEM <0|1>     -> disable/enable telemetry streaming (default ON)
 //    GET             -> print one telemetry line immediately
@@ -506,6 +510,41 @@ void handleLine(char* line) {
   if (strcmp(cmd, "LINERESET") == 0) {
     bot.resetLineTuning();
     Serial.println(F("ACK LINERESET"));
+    return;
+  }
+
+  // ── TURNSPEED <fast> <slowMax> <slowMin> ── (سالب = لا تغيّر)
+  if (strcmp(cmd, "TURNSPEED") == 0) {
+    long f, mx, mn;
+    if (!nextLong(&f))  f  = -1;
+    if (!nextLong(&mx)) mx = -1;
+    if (!nextLong(&mn)) mn = -1;
+    bot.setTurnSpeed((int)f, (int)mx, (int)mn);
+    Serial.println(F("ACK TURNSPEED"));
+    return;
+  }
+
+  // ── TURNTUNE <kp> <fastDeg> ── (سالب = لا تغيّر)
+  if (strcmp(cmd, "TURNTUNE") == 0) {
+    float kp, fd;
+    if (!nextFloat(&kp)) kp = -1;
+    if (!nextFloat(&fd)) fd = -1;
+    bot.setTurnTune(kp, fd);
+    Serial.println(F("ACK TURNTUNE"));
+    return;
+  }
+
+  // ── TURNTUNEP ── (اطبع قيم اللف)
+  if (strcmp(cmd, "TURNTUNEP") == 0) {
+    bot.printTurnTuning();
+    Serial.println(F("ACK TURNTUNEP"));
+    return;
+  }
+
+  // ── TURNRESET ── (رجّع قيم اللف للافتراضي)
+  if (strcmp(cmd, "TURNRESET") == 0) {
+    bot.resetTurnTuning();
+    Serial.println(F("ACK TURNRESET"));
     return;
   }
 

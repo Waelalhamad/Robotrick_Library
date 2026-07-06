@@ -59,6 +59,10 @@ void printMenu() {
     Serial.println(F("  K <kp> <kd>            PD الخط (K 0.03 0.06)"));
     Serial.println(F("  G <dead> <boost> <slow>  إضافات (G 700 5 70)"));
     Serial.println(F("  P  اطبع قيم الخط     Q  رجّع الخط للافتراضي"));
+    Serial.println(F("  --- معايرة اللف (turn) ---"));
+    Serial.println(F("  z <fast> <smax> <smin>  سرعات اللف (z 120 75 50)"));
+    Serial.println(F("  Z <kp> <fastDeg>        ضبط الهبوط (Z 3.5 45)"));
+    Serial.println(F("  a  اطبع قيم اللف     A  رجّع اللف للافتراضي"));
     Serial.println(F("  x        stop        ?  menu"));
     Serial.println(F("==================================="));
     Serial.print(F("> "));
@@ -226,6 +230,18 @@ void handle(char cmd, float val, float val2, float val3) {
     }
     else if (cmd == 'Q') {   // رجّع قيم الخط للافتراضي
         bot.resetLineTuning();
+    }
+    else if (cmd == 'z') {   // سرعات اللف:  z <fast> <slowMax> <slowMin>
+        bot.setTurnSpeed((int)val, (int)val2, (int)val3);
+    }
+    else if (cmd == 'Z') {   // ضبط اللف:  Z <kp> <fastDeg>
+        bot.setTurnTune(val, val2);
+    }
+    else if (cmd == 'a') {   // اطبع قيم اللف
+        bot.printTurnTuning();
+    }
+    else if (cmd == 'A') {   // رجّع قيم اللف للافتراضي
+        bot.resetTurnTuning();
     }
     else if (cmd == 'x') {
         bot.stop();

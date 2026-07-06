@@ -20,7 +20,9 @@ Robotrick::Robotrick()
       _hdgKp(RT_STRAIGHT_KP), _hdgKd(RT_STRAIGHT_KD), _hdgDeadband(RT_STRAIGHT_DEADBAND),
       _lineBase(RT_LINE_BASE), _lineMax(RT_LINE_MAX), _lineMin(RT_LINE_MIN),
       _lineSlow(RT_LINE_SLOW), _lineDeadband(RT_LINE_DEADBAND),
-      _lineKp(RT_LINE_KP), _lineKd(RT_LINE_KD), _lineKpBoost(RT_LINE_KP_BOOST) {}
+      _lineKp(RT_LINE_KP), _lineKd(RT_LINE_KD), _lineKpBoost(RT_LINE_KP_BOOST),
+      _turnFast(RT_TURN_FAST), _turnSlowMax(RT_TURN_SLOW_MAX), _turnSlowMin(RT_TURN_SLOW_MIN),
+      _turnKp(RT_TURN_KP), _turnFastDeg(RT_TURN_FAST_DEG) {}
 
 // ─────────────────────────────────────────────────────
 //  SETUP
@@ -179,6 +181,39 @@ void Robotrick::setHeadingPD(float kp, float kd, float deadband) {
     Serial.print(F("[Robotrick] headingPD  Kp=")); Serial.print(_hdgKp, 3);
     Serial.print(F("  Kd=")); Serial.print(_hdgKd, 3);
     Serial.print(F("  dead=")); Serial.print(_hdgDeadband, 2); Serial.println(F("deg"));
+}
+
+// ── Turn tuning (لايف — بتأثّر على turnLeft/turnRight مباشرة) ──────
+void Robotrick::setTurnSpeed(int fast, int slowMax, int slowMin) {
+    if (fast    >= 0) _turnFast    = constrain(fast,    0, 255);
+    if (slowMax >= 0) _turnSlowMax = constrain(slowMax, 0, 255);
+    if (slowMin >= 0) _turnSlowMin = constrain(slowMin, 0, 255);
+    Serial.print(F("[Robotrick] turnSpeed fast=")); Serial.print(_turnFast);
+    Serial.print(F("  slowMax=")); Serial.print(_turnSlowMax);
+    Serial.print(F("  slowMin=")); Serial.println(_turnSlowMin);
+}
+
+void Robotrick::setTurnTune(float kp, float fastDeg) {
+    if (kp      >= 0) _turnKp      = kp;
+    if (fastDeg >= 0) _turnFastDeg = fastDeg;
+    Serial.print(F("[Robotrick] turnTune Kp=")); Serial.print(_turnKp, 2);
+    Serial.print(F("  fastDeg=")); Serial.println(_turnFastDeg, 1);
+}
+
+void Robotrick::resetTurnTuning() {
+    _turnFast = RT_TURN_FAST; _turnSlowMax = RT_TURN_SLOW_MAX; _turnSlowMin = RT_TURN_SLOW_MIN;
+    _turnKp = RT_TURN_KP; _turnFastDeg = RT_TURN_FAST_DEG;
+    Serial.println(F("[Robotrick] turn tuning RESET to defaults"));
+    printTurnTuning();
+}
+
+void Robotrick::printTurnTuning() {
+    Serial.println(F("[Robotrick] --- turn tuning ---"));
+    Serial.print(F("  fast=")); Serial.print(_turnFast);
+    Serial.print(F("  slowMax=")); Serial.print(_turnSlowMax);
+    Serial.print(F("  slowMin=")); Serial.println(_turnSlowMin);
+    Serial.print(F("  Kp=")); Serial.print(_turnKp, 2);
+    Serial.print(F("  fastDeg=")); Serial.println(_turnFastDeg, 1);
 }
 
 float Robotrick::getDriveSpeed() { return _driveSpeed; }
@@ -391,12 +426,12 @@ void Robotrick::turn(float deg) {
     // نقيس مقدار الدوران (magnitude) — مستقل عن إشارة الجايرو = ما في لف لانهائي
     float targetMag = fabs(deg);
     int   dir       = ((deg >= 0) ? 1 : -1) * RT_TURN_DIR;  // +1 يسار، -1 يمين (فيزيائياً)
-    float slowStart = targetMag - RT_TURN_FAST_DEG;
+    float slowStart = targetMag - _turnFastDeg;
     if (slowStart < 0) slowStart = 0;
 
     // Phase 1: سرعة كاملة لحد ما نقرب من الهدف
-    _spinL(-dir * RT_TURN_FAST);
-    _spinR( dir * RT_TURN_FAST);
+    _spinL(-dir * _turnFast);
+    _spinR( dir * _turnFast);
 
     uint32_t timeout = millis() + RT_TURN_TIMEOUT;
     while (millis() < timeout) {
@@ -410,8 +445,8 @@ void Robotrick::turn(float deg) {
         float err = targetMag - fabs(_heading);   // كم باقي
         if (err <= RT_TURN_TOLERANCE) break;
 
-        int spd = (int)(RT_TURN_KP * err);
-        spd = constrain(spd, RT_TURN_SLOW_MIN, RT_TURN_SLOW_MAX);
+        int spd = (int)(_turnKp * err);
+        spd = constrain(spd, _turnSlowMin, _turnSlowMax);
         _spinL(-dir * spd);
         _spinR( dir * spd);
     }
@@ -441,7 +476,7 @@ void Robotrick::pivot(char wheel, float deg) {
     Serial.print(sgn > 0 ? F(" FWD ") : F(" BACK ")); Serial.print(targetMag); Serial.println(F("°"));
 
     resetHeading();
-    float slowStart = targetMag - RT_TURN_FAST_DEG;
+    float slowStart = targetMag - _turnFastDeg;
     if (slowStart < 0) slowStart = 0;
 
     // Phase 1: سرعة كاملة — عجلة وحدة، التانية = 0
@@ -459,7 +494,7 @@ void Robotrick::pivot(char wheel, float deg) {
         _updateHeading();
         float err = targetMag - fabs(_heading);
         if (err <= RT_PIVOT_STOP_DEG) break;
-        int spd = constrain((int)(RT_TURN_KP * err), RT_PIVOT_MIN, RT_PIVOT_SLOW);
+        int spd = constrain((int)(_turnKp * err), RT_PIVOT_MIN, RT_PIVOT_SLOW);
         if (useLeft) { _spinL(sgn * spd); _spinR(0); }
         else         { _spinR(sgn * spd); _spinL(0); }
     }

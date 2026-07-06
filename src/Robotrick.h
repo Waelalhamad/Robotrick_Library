@@ -226,6 +226,10 @@ public:
     void  setDriveAccel(float cmPerSec2);           // تسارع/تباطؤ الرحلة (cm/s^2)
     void  setDrivePID(float kp, float kd, float ki = 0); // PID ملاحقة المسافة
     void  setHeadingPD(float kp, float kd, float deadband = -1); // استقامة الجايرو (PD)
+    void  setTurnSpeed(int fast, int slowMax, int slowMin);  // سرعات اللف (سالب = لا تغيّر)
+    void  setTurnTune(float kp, float fastDeg);     // قوة الهبوط + زاوية بداية التبطئة
+    void  resetTurnTuning();                        // رجّع سرعات اللف للافتراضي
+    void  printTurnTuning();                        // اطبع قيم اللف
     void  resetDriveTuning();                       // رجّع السرعة والـ PID والاستقامة لقيم CONFIG
     float getDriveSpeed();                          // السرعة الحالية (cm/s)
     void  printDriveTuning();                       // اطبع القيم الحالية
@@ -294,6 +298,10 @@ private:
     // line-follower tuning قابلة للتعديل لايف (تبدأ من قيم الـ CONFIG)
     int   _lineBase, _lineMax, _lineMin, _lineSlow, _lineDeadband;
     float _lineKp, _lineKd, _lineKpBoost;
+
+    // turn tuning قابلة للتعديل لايف (تبدأ من قيم الـ CONFIG)
+    int   _turnFast, _turnSlowMax, _turnSlowMin;   // = RT_TURN_FAST / SLOW_MAX / SLOW_MIN
+    float _turnKp, _turnFastDeg;                   // = RT_TURN_KP / FAST_DEG
 
     // line follower
     QTRSensors _qtr;
