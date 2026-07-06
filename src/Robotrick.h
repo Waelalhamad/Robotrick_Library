@@ -134,7 +134,7 @@
 //  لازم lineCalibrate() مرة كل تشغيل (حرّك الروبوت يدوياً فوق الخط)
 // ══════════════════════════════════════════════════
 #define RT_QTR_N          14      // 14 حساس وسطى (index 5..18) — مجال أوسع = ما يضيع بسهولة
-#define RT_QTR_CENTER   8500      // (RT_QTR_N-1)*1000/2 — النص
+#define RT_QTR_CENTER   7600      // النص الفعلي المقاس (الروبوت متمركز → pos≈7600؛ المصفوفة مزاحة)
 #define RT_QTR_EEPROM_ADDR  0     // مكان حفظ معايرة الخط بالـ EEPROM (تنحفظ مرة، تفضل للأبد)
 
 #define RT_LINE_BASE       50     // سرعة الأساس (فوق عتبة الحركة ~90 عشان يتحرّك أصلاً)
@@ -157,8 +157,8 @@
 #define RT_LF2_OUTER_DARK  2      // كم غامق بكل طرف معاً ليعتبر تقاطع
 #define RT_LF2_FORCE_MS  400      // مدة المشي مستقيم عبر التقاطع
 
-// ما في حساسات ميتة بالوسط 10 (99 = معطّل)
-#define RT_QTR_DEAD_1     99
+// حساسات ميتة (99 = مافي). idx7 خربان (قِسناه = 0 دايماً بين حساسين 1000)
+#define RT_QTR_DEAD_1      7
 #define RT_QTR_DEAD_2     99
 
 // كشف التقاطع (junction): كم حساس غامق مع بعض
@@ -248,6 +248,8 @@ public:
     void setLineTune(int deadband, float kpBoost, int slow); // deadband/boost/سرعة الكوع (سالب = لا تغيّر)
     void resetLineTuning();                               // رجّع كل قيم الخط للافتراضي
     void printLineTuning();                               // اطبع القيم الحالية
+
+    void lineMonitor(uint32_t ms = 4000);          // اقرأ حيّ: قيم كل حساس + القمة + الموقع (لتعرف النص الحقيقي)
 
     uint16_t linePosition();                       // 0..24000 (12000 = بالنص)
     void     lineReadRaw(uint16_t* dest25);        // قراءة خام (بدون calibration)

@@ -724,6 +724,52 @@ uint16_t Robotrick::linePosition() {
     return _qtr.readLineBlack(_qtrVals);
 }
 
+// قراءة حيّة: حط الروبوت عالخط واقرأ. بيطبع قيمة كل حساس (0..1000)،
+// أي حساس هو القمة (*)، والموقع المحسوب مقابل النص النظري.
+// الهدف: تشوف لمّا الروبوت متمركز بالزبط، الموقع كم فعلاً.
+void Robotrick::lineMonitor(uint32_t ms) {
+    _lineBegin();
+    if (!_qtrReady && !lineLoadCalibration()) {
+        Serial.println(F("[Robotrick] ما في معايرة — اعمل lineCalibrate أول. (بطبع خام)"));
+    }
+    float mid = (RT_QTR_N - 1) * 1000.0f / 2.0f;   // النص النظري (=6500 لـ14 حساس)
+    Serial.print(F("[Robotrick] LINE MONITOR — النص النظري = ")); Serial.println(mid, 0);
+    uint32_t endAt = millis() + ms;
+    while (millis() < endAt) {
+        if (_qtrReady) _qtr.readCalibrated(_qtrVals);
+        else           _qtr.read(_qtrVals);
+
+        int peak = -1; uint16_t peakV = 0; uint32_t sum = 0;
+        for (uint8_t i = 0; i < RT_QTR_N; i++) {
+            sum += _qtrVals[i];
+            if (_qtrVals[i] > peakV) { peakV = _qtrVals[i]; peak = i; }
+        }
+        // نفس centroid المتتبع: أوزان تربيعية حوالين القمة فقط
+        float wsum = 0, tot = 0;
+        for (int i = 0; i < RT_QTR_N; i++) {
+            if (peak < 0 || abs(i - peak) > RT_LINE_WINDOW) continue;
+            float w = (float)_qtrVals[i] * (float)_qtrVals[i];
+            wsum += w * (i * 1000.0f);
+            tot  += w;
+        }
+        float pos = (tot > 0) ? (wsum / tot) : -1;
+
+        Serial.print(F("S"));
+        for (uint8_t i = 0; i < RT_QTR_N; i++) {
+            Serial.print(' ');
+            if (i == peak) Serial.print('*');            // القمة
+            Serial.print(_qtrVals[i]);
+        }
+        Serial.print(F("  | peak=idx")); Serial.print(peak);
+        Serial.print(F("  pos=")); Serial.print(pos, 0);
+        Serial.print(F(" (")); Serial.print(pos / 1000.0f, 2); Serial.print(F(" حساس)"));
+        Serial.print(F("  mid=")); Serial.print(mid, 0);
+        Serial.print(F("  sum=")); Serial.println(sum);
+        delay(250);
+    }
+    Serial.println(F("[Robotrick] خلص المونيتور."));
+}
+
 bool Robotrick::followLineToJunction(uint8_t nJunctions) { return _followLine(nJunctions, 0); }
 bool Robotrick::followLineForCM(float cm)                { return _followLine(0, cm); }
 
