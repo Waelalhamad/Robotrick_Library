@@ -30,6 +30,8 @@
 //    SERVO <i> <a>          -> bot.servoWrite(i,a)   (jump to angle 0..180, non-blocking)
 //    SERVOMOVE <i> <a> [dps]-> bot.servoMove(i,a,dps) (smooth sweep, blocking; DONE)
 //    SERVODETACH <i>        -> bot.servoDetach(i)    (release servo, stops jitter)
+//    SERVOSPIN <i> <spd>    -> bot.servoSpin(i,spd)  (360 servo: -100..100, 0=stop)
+//    SERVOSTOP <i>          -> bot.servoStop(i)      (stop a 360 continuous servo)
 //    DRIVESPEED <cm/s>      -> bot.setDriveSpeed(v)   (live cruise speed of forward/back)
 //    DRIVEACCEL <cm/s^2>    -> bot.setDriveAccel(v)
 //    DRIVEPID <kp> <kd> [ki]-> bot.setDrivePID(...)   (negative arg = keep current)
@@ -388,6 +390,24 @@ void handleLine(char* line) {
     if (!nextLong(&idx)) { Serial.println(F("ERR SERVODETACH needs <idx>")); return; }
     bot.servoDetach((uint8_t)idx);
     Serial.println(F("ACK SERVODETACH"));
+    return;
+  }
+
+  // ── SERVOSPIN <idx> <speed> ── (سيرفو 360°: speed -100..100، 0 = وقوف)
+  if (strcmp(cmd, "SERVOSPIN") == 0) {
+    long idx, sp;
+    if (!nextLong(&idx) || !nextLong(&sp)) { Serial.println(F("ERR SERVOSPIN needs <idx> <speed -100..100>")); return; }
+    bot.servoSpin((uint8_t)idx, (int)sp);
+    Serial.println(F("ACK SERVOSPIN"));
+    return;
+  }
+
+  // ── SERVOSTOP <idx> ── (وقّف سيرفو الدوران)
+  if (strcmp(cmd, "SERVOSTOP") == 0) {
+    long idx;
+    if (!nextLong(&idx)) { Serial.println(F("ERR SERVOSTOP needs <idx>")); return; }
+    bot.servoStop((uint8_t)idx);
+    Serial.println(F("ACK SERVOSTOP"));
     return;
   }
 

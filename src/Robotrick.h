@@ -191,6 +191,9 @@
 #define RT_SERVO_MAX_DEG  180
 // سرعة الحركة الناعمة الافتراضية (درجة/ثانية) — 0 = فوري
 #define RT_SERVO_SPEED    120
+// نبضة "الوقوف" لسيرفو 360° (دوران مستمر) — 1500µs قياسي.
+// إذا السيرفو بيزحف بطيء وهو المفروض واقف → غيّرها شوي (1490 / 1510)
+#define RT_SERVO_STOP_US 1500
 
 // ── Safety timeouts (ms) ───────────────────────────
 #define RT_MOVE_TIMEOUT  20000
@@ -263,6 +266,9 @@ public:
                     uint16_t degPerSec = RT_SERVO_SPEED);        // حركة ناعمة بسرعة معيّنة (blocking)
     void  servoDetach(uint8_t idx);                              // حرّر السيرفو (يوقف الطنين/العزم)
     void  servoAttachAll();                                      // فعّل السيرفوهات الثلاثة
+    // ── سيرفو 360° (دوران مستمر) — السرعة مش الموقع ──
+    void  servoSpin(uint8_t idx, int speed);                     // -100..100 (0 = وقوف)
+    void  servoStop(uint8_t idx);                                // وقّف سيرفو الدوران (= spin 0)
     int   servoAngle(uint8_t idx);                               // آخر زاوية مكتوبة (-1 = غير مفعّل)
 
     // ── Low-level (لو احتجت تتحكم يدوي) ────────────

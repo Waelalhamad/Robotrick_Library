@@ -597,6 +597,29 @@ void Robotrick::servoAttachAll() {
     for (uint8_t i = 0; i < RT_SERVO_N; i++) _servoEnsure(i);
 }
 
+// سيرفو 360° (دوران مستمر): speed -100..100، 0 = وقوف
+// بيكتب نبضة µs: STOP عند 0، وينزاح باتجاه MIN/MAX حسب الإشارة والمقدار.
+void Robotrick::servoSpin(uint8_t idx, int speed) {
+    if (idx < 1 || idx > RT_SERVO_N) {
+        Serial.println(F("[Robotrick] servo idx لازم 1..3")); return;
+    }
+    uint8_t i = idx - 1;
+    speed = constrain(speed, -100, 100);
+    if (!_servoEnsure(i)) return;
+    long us;
+    if (speed >= 0) us = RT_SERVO_STOP_US + (long)speed * (RT_SERVO_MAX_US - RT_SERVO_STOP_US) / 100;
+    else            us = RT_SERVO_STOP_US + (long)speed * (RT_SERVO_STOP_US - RT_SERVO_MIN_US) / 100;
+    _servo[i].writeMicroseconds((int)us);
+    _servoPos[i] = -1;   // مش زاوية — دوران
+    Serial.print(F("[Robotrick] servo ")); Serial.print(idx);
+    Serial.print(F(" spin ")); Serial.print(speed);
+    Serial.print(F("%  (")); Serial.print(us); Serial.println(F("us)"));
+}
+
+void Robotrick::servoStop(uint8_t idx) {
+    servoSpin(idx, 0);
+}
+
 int Robotrick::servoAngle(uint8_t idx) {
     if (idx < 1 || idx > RT_SERVO_N) return -1;
     return _servoPos[idx - 1];
