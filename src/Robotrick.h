@@ -173,6 +173,11 @@
 #define RT_LINE_LOST_MS    900    // مدة البحث قبل ما يستسلم
 #define RT_LINE_TIMEOUT  15000    // مهلة أمان للأمر كله (ms)
 
+// تعارض QTR-RC مع مكتبة Servo (نفس مؤقّت Timer5): قراءة الحساسات كل لوب
+// بتشوّش نبضة السيرفو فيرجف. الحل: افصل السيرفوهات أثناء تتبع الخط.
+// بيرجعوا لحالهم أول ما تكتب لهم أمر بعدها (attach كسول). 0 = عطّل الفصل.
+#define RT_LINE_PARK_SERVOS   1
+
 // ── Gyro (L3GD20H @ I2C 0x6B) ──────────────────────
 #define RT_GYRO_ADDR    0x6B
 #define RT_GYRO_SENS    0.00875f  // dps per LSB
@@ -275,6 +280,7 @@ public:
     // ── سيرفو 360° (دوران مستمر) — السرعة مش الموقع ──
     void  servoSpin(uint8_t idx, int speed);                     // -100..100 (0 = وقوف)
     void  servoStop(uint8_t idx);                                // وقّف سيرفو الدوران (= spin 0)
+    void  setServoStop(int us);                                  // عاير نبضة الوقوف (~1500) لحد ما يوقف تماماً
     int   servoAngle(uint8_t idx);                               // آخر زاوية مكتوبة (-1 = غير مفعّل)
 
     // ── Low-level (لو احتجت تتحكم يدوي) ────────────
@@ -316,8 +322,10 @@ private:
     uint8_t  _servoPin[RT_SERVO_N];
     int16_t  _servoPos[RT_SERVO_N];   // آخر زاوية (-1 = ما تحرّك بعد)
     bool     _servoAttached[RT_SERVO_N];
+    int      _servoStopUs;            // نبضة الوقوف لسيرفو 360° (تبدأ من RT_SERVO_STOP_US)
     void     _servoBegin();           // سجّل البنات (بدون attach — كسول)
     bool     _servoEnsure(uint8_t i); // فعّل السيرفو i لو مش مفعّل؛ true=جاهز
+    void     _lineParkServos();       // افصل كل السيرفوهات قبل تتبع الخط (ضد تعارض Timer5)
 
     long  countsForCM(float cm);
     void  driveStraight(float cm, int dir);   // dir: +1 forward, -1 back

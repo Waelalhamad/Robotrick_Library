@@ -30,6 +30,9 @@
 //    SERVO <i> <a>          -> bot.servoWrite(i,a)   (jump to angle 0..180, non-blocking)
 //    SERVOMOVE <i> <a> [dps]-> bot.servoMove(i,a,dps) (smooth sweep, blocking; DONE)
 //    SERVODETACH <i>        -> bot.servoDetach(i)    (release servo, stops jitter)
+//    SERVOSPIN <i> <spd>    -> bot.servoSpin(i,spd)  (360 servo, -100..100, 0=stop)
+//    SERVOSTOP <i>          -> bot.servoStop(i)      (stop 360 servo)
+//    SERVOSTOPUS <us>       -> bot.setServoStop(us)  (trim 360 neutral until it stops)
 //    SERVOSPIN <i> <spd>    -> bot.servoSpin(i,spd)  (360 servo: -100..100, 0=stop)
 //    SERVOSTOP <i>          -> bot.servoStop(i)      (stop a 360 continuous servo)
 //    DRIVESPEED <cm/s>      -> bot.setDriveSpeed(v)   (live cruise speed of forward/back)
@@ -412,6 +415,15 @@ void handleLine(char* line) {
     if (!nextLong(&idx)) { Serial.println(F("ERR SERVOSTOP needs <idx>")); return; }
     bot.servoStop((uint8_t)idx);
     Serial.println(F("ACK SERVOSTOP"));
+    return;
+  }
+
+  // ── SERVOSTOPUS <us> ── (عاير نبضة وقوف سيرفو 360°، ~1500)
+  if (strcmp(cmd, "SERVOSTOPUS") == 0) {
+    long us;
+    if (!nextLong(&us)) { Serial.println(F("ERR SERVOSTOPUS needs <us>")); return; }
+    bot.setServoStop((int)us);
+    Serial.println(F("ACK SERVOSTOPUS"));
     return;
   }
 

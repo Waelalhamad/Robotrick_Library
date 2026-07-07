@@ -50,6 +50,7 @@ void printMenu() {
     Serial.println(F("  s <i> <a>  servo فوري (s 1 90)   v <i> <a>  servo ناعم"));
     Serial.println(F("  d <i>    فصل السيرفو (d 1)"));
     Serial.println(F("  S <i> <spd>  سيرفو 360° دوران -100..100 (S 1 0 = وقوف)"));
+    Serial.println(F("  W <us>   عاير نبضة وقوف السيرفو (W 1490) لحد ما يوقف تماماً"));
     Serial.println(F("  w <cm/s> سرعة forward (w 25)"));
     Serial.println(F("  t <kp> <kd> <ki>  PID المسافة (t 9 2 0)   T  اطبع القيم"));
     Serial.println(F("  H <kp> <kd> <dead>  استقامة الجايرو (H 1.8 0.6 1)"));
@@ -200,6 +201,10 @@ void handle(char cmd, float val, float val2, float val3) {
         Serial.print(F(">> servo spin ")); Serial.print((int)val);
         Serial.print(F(" @ ")); Serial.println((int)val2);
         bot.servoSpin((uint8_t)val, (int)val2);
+    }
+    else if (cmd == 'W') {   // عاير نبضة وقوف سيرفو 360°:  W <us>  (~1500)
+        Serial.print(F(">> servo stop trim = ")); Serial.println((int)val);
+        bot.setServoStop((int)val);
     }
     else if (cmd == 'w') {   // سرعة forward:  w <cm/s>
         bot.setDriveSpeed(val);

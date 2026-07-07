@@ -554,6 +554,7 @@ void Robotrick::liftDown(uint32_t ms) {
 //  عشان ما ياخد timer/عزم قبل ما نحتاجه.
 // ─────────────────────────────────────────────────────
 void Robotrick::_servoBegin() {
+    _servoStopUs = RT_SERVO_STOP_US;
     _servoPin[0] = RT_SERVO1_PIN;
     _servoPin[1] = RT_SERVO2_PIN;
     _servoPin[2] = RT_SERVO3_PIN;
@@ -642,8 +643,8 @@ void Robotrick::servoSpin(uint8_t idx, int speed) {
     speed = constrain(speed, -100, 100);
     if (!_servoEnsure(i)) return;
     long us;
-    if (speed >= 0) us = RT_SERVO_STOP_US + (long)speed * (RT_SERVO_MAX_US - RT_SERVO_STOP_US) / 100;
-    else            us = RT_SERVO_STOP_US + (long)speed * (RT_SERVO_STOP_US - RT_SERVO_MIN_US) / 100;
+    if (speed >= 0) us = _servoStopUs + (long)speed * (RT_SERVO_MAX_US - _servoStopUs) / 100;
+    else            us = _servoStopUs + (long)speed * (_servoStopUs - RT_SERVO_MIN_US) / 100;
     _servo[i].writeMicroseconds((int)us);
     _servoPos[i] = -1;   // مش زاوية — دوران
     Serial.print(F("[Robotrick] servo ")); Serial.print(idx);
@@ -653,6 +654,27 @@ void Robotrick::servoSpin(uint8_t idx, int speed) {
 
 void Robotrick::servoStop(uint8_t idx) {
     servoSpin(idx, 0);
+}
+
+// عاير نبضة الوقوف لسيرفو 360°. بيطبّقها فوراً على أي سيرفو مفعّل
+// حتى تشوف مباشرة لمّا يوقف تماماً (زحف للأمام؟ قلّلها. للخلف؟ زوّدها).
+void Robotrick::setServoStop(int us) {
+    _servoStopUs = constrain(us, 1000, 2000);
+    for (uint8_t i = 0; i < RT_SERVO_N; i++)
+        if (_servoAttached[i]) _servo[i].writeMicroseconds(_servoStopUs);
+    Serial.print(F("[Robotrick] servo stop = ")); Serial.print(_servoStopUs);
+    Serial.println(F("us (طبّقها على المفعّلين)"));
+}
+
+// افصل كل سيرفو مفعّل قبل تتبع الخط. سبب: قراءة QTR-RC (RC timing) كل لوب
+// بتشوّش نبضة السيرفو (Timer5) فيرجف/يتحرّك. بعد الفصل ما في نبضات = ما في تشويش.
+// بيرجعوا للعمل أوتوماتيك أول ما تنادي servoWrite/servoSpin بعدها (attach كسول).
+void Robotrick::_lineParkServos() {
+    bool any = false;
+    for (uint8_t i = 0; i < RT_SERVO_N; i++) {
+        if (_servoAttached[i]) { _servo[i].detach(); _servoAttached[i] = false; any = true; }
+    }
+    if (any) Serial.println(F("[Robotrick] servos parked (فُصلوا) أثناء تتبع الخط"));
 }
 
 int Robotrick::servoAngle(uint8_t idx) {
@@ -823,6 +845,10 @@ bool Robotrick::_followLine(uint8_t nJunctions, float cm) {
     if (nJunctions) { Serial.print(F("to junction #")); Serial.println(nJunctions); }
     else            { Serial.print(cm); Serial.println(F("cm")); }
 
+#if RT_LINE_PARK_SERVOS
+    _lineParkServos();   // ضد تعارض QTR-RC مع السيرفو (Timer5)
+#endif
+
     float cmPerCount = (3.14159f * RT_WHEEL_DIAMETER_MM / RT_COUNTS_PER_REV) / 10.0f;
     long  targetCounts = (cm > 0) ? (long)(cm / cmPerCount) : 0;
     resetEncoders();
@@ -964,6 +990,10 @@ bool Robotrick::followLine2(float cm) {
         return false;
     }
     Serial.print(F("[Robotrick] LINE2 ")); Serial.print(cm); Serial.println(F("cm"));
+
+#if RT_LINE_PARK_SERVOS
+    _lineParkServos();   // ضد تعارض QTR-RC مع السيرفو (Timer5)
+#endif
 
     float cmPerCount   = (3.14159f * RT_WHEEL_DIAMETER_MM / RT_COUNTS_PER_REV) / 10.0f;
     long  targetCounts = (cm > 0) ? (long)(cm / cmPerCount) : 0;
