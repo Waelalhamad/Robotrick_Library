@@ -30,6 +30,9 @@
 //    SERVO <i> <a>          -> bot.servoWrite(i,a)   (jump to angle 0..180, non-blocking)
 //    SERVOMOVE <i> <a> [dps]-> bot.servoMove(i,a,dps) (smooth sweep, blocking; DONE)
 //    SERVODETACH <i>        -> bot.servoDetach(i)    (release servo, stops jitter)
+//    LIFTUPA <ms>           -> bot.liftUpAsync(ms)   (non-blocking lift up; 0=stay on)
+//    LIFTDOWNA <ms>         -> bot.liftDownAsync(ms) (non-blocking lift down)
+//    LIFTSTOP               -> bot.liftStop()        (stop lift / cancel async)
 //    SERVOSPIN <i> <spd>    -> bot.servoSpin(i,spd)  (360 servo, -100..100, 0=stop)
 //    SERVOSTOP <i>          -> bot.servoStop(i)      (stop 360 servo)
 //    SERVOSTOPUS <us>       -> bot.setServoStop(us)  (trim 360 neutral until it stops)
@@ -365,6 +368,29 @@ void handleLine(char* line) {
     Serial.println(F("ACK LIFTDOWN"));
     busy = true; bot.liftDown((uint32_t)ms); busy = false;
     Serial.println(F("DONE LIFTDOWN"));
+    return;
+  }
+
+  // ── LIFTUPA <ms> ── (رفع async — ما بيحبس؛ 0 = يفضل شغّال)
+  if (strcmp(cmd, "LIFTUPA") == 0) {
+    long ms; if (!nextLong(&ms)) ms = 0;
+    bot.liftUpAsync((uint32_t)ms);
+    Serial.println(F("ACK LIFTUPA"));
+    return;
+  }
+
+  // ── LIFTDOWNA <ms> ── (تنزيل async)
+  if (strcmp(cmd, "LIFTDOWNA") == 0) {
+    long ms; if (!nextLong(&ms)) ms = 0;
+    bot.liftDownAsync((uint32_t)ms);
+    Serial.println(F("ACK LIFTDOWNA"));
+    return;
+  }
+
+  // ── LIFTSTOP ── (وقّف الرافعة، يلغي async)
+  if (strcmp(cmd, "LIFTSTOP") == 0) {
+    bot.liftStop();
+    Serial.println(F("ACK LIFTSTOP"));
     return;
   }
 

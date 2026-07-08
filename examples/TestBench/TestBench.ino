@@ -46,7 +46,8 @@ void printMenu() {
     Serial.println(F("  n <cm>   LINE2 خوارزمية بديلة         (n 40)"));
     Serial.println(F("  q        square: (fwd30 + left90) x4"));
     Serial.println(F("  4 <spd>  motor4 (رافعة) بسرعة spd (-255..255، 0=وقوف)"));
-    Serial.println(F("  u <ms>   liftUp مدة ms       i <ms>  liftDown"));
+    Serial.println(F("  u <ms>   liftUp مدة ms       i <ms>  liftDown  (حابسة)"));
+    Serial.println(F("  U <ms>   liftUp async        I <ms>  liftDown async  0  وقّف الرافعة"));
     Serial.println(F("  s <i> <a>  servo فوري (s 1 90)   v <i> <a>  servo ناعم"));
     Serial.println(F("  d <i>    فصل السيرفو (d 1)"));
     Serial.println(F("  S <i> <spd>  سيرفو 360° دوران -100..100 (S 1 0 = وقوف)"));
@@ -182,6 +183,18 @@ void handle(char cmd, float val, float val2, float val3) {
     else if (cmd == 'i') {
         Serial.print(F(">> lift DOWN ")); Serial.print((uint32_t)val); Serial.println(F("ms"));
         bot.liftDown((uint32_t)val);
+    }
+    else if (cmd == 'U') {   // رافعة فوق async (ما بتنطر):  U <ms>  (0 = تفضل)
+        Serial.print(F(">> lift UP async ")); Serial.print((uint32_t)val); Serial.println(F("ms"));
+        bot.liftUpAsync((uint32_t)val);
+    }
+    else if (cmd == 'I') {   // رافعة تحت async:  I <ms>
+        Serial.print(F(">> lift DOWN async ")); Serial.print((uint32_t)val); Serial.println(F("ms"));
+        bot.liftDownAsync((uint32_t)val);
+    }
+    else if (cmd == '0') {   // وقّف الرافعة (يلغي async)
+        Serial.println(F(">> lift STOP"));
+        bot.liftStop();
     }
     else if (cmd == 's') {   // servo فوري:  s <idx> <angle>
         Serial.print(F(">> servo ")); Serial.print((int)val);

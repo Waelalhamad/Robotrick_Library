@@ -268,8 +268,14 @@ public:
     void  motor4(int speed);                 // -255..255، 0 = وقوف (non-blocking)
     void  motor4For(int speed, uint32_t ms); // شغّله مدة (ms) ثم يوقف (blocking)
     void  motor4Stop();
-    void  liftUp(uint32_t ms);               // ارفع الرافعة مدة (ms) — blocking
+    void  liftUp(uint32_t ms);               // ارفع الرافعة مدة (ms) — blocking (ينطر يخلص)
     void  liftDown(uint32_t ms);             // نزّل الرافعة مدة (ms) — blocking
+    // نسخ غير حابسة: تبدأ وترجع فوراً، وتوقف لحالها بعد ms (0 = تفضل شغّالة).
+    // لازم تنادي update() باللوب (أو تعمل حركة تانية) حتى توقف بوقتها.
+    void  liftUpAsync(uint32_t ms = 0);      // ارفع بدون انتظار
+    void  liftDownAsync(uint32_t ms = 0);    // نزّل بدون انتظار
+    void  liftStop();                        // وقّف الرافعة (يلغي أي مؤقّت async)
+    bool  liftBusy();                        // هل الرافعة شغّالة بمؤقّت async؟
 
     // ── Servos (idx = 1..3 على البنات A2/A3/A4) ────
     void  servoWrite(uint8_t idx, int angle);                    // روح للزاوية فوراً (0..180)
@@ -323,6 +329,8 @@ private:
     int16_t  _servoPos[RT_SERVO_N];   // آخر زاوية (-1 = ما تحرّك بعد)
     bool     _servoAttached[RT_SERVO_N];
     int      _servoStopUs;            // نبضة الوقوف لسيرفو 360° (تبدأ من RT_SERVO_STOP_US)
+    uint32_t _m4StopAt = 0;           // وقت إيقاف الرافعة async (0 = ما في مؤقّت)
+    void     _serviceMotor4();        // يوقف الرافعة لما يخلص وقتها — يُنادى بالخلفية
     void     _servoBegin();           // سجّل البنات (بدون attach — كسول)
     bool     _servoEnsure(uint8_t i); // فعّل السيرفو i لو مش مفعّل؛ true=جاهز
     void     _lineParkServos();       // افصل كل السيرفوهات قبل تتبع الخط (ضد تعارض Timer5)

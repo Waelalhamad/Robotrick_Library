@@ -529,6 +529,15 @@ void Robotrick::motor4(int speed) {
 
 void Robotrick::motor4Stop() {
     analogWrite(RT_M4_PWM, 0);
+    _m4StopAt = 0;               // ألغِ أي مؤقّت async
+}
+
+// يوقف الرافعة تلقائياً لما يخلص وقتها. بينادى من update() ومن حلقات الحركة.
+void Robotrick::_serviceMotor4() {
+    if (_m4StopAt && millis() >= _m4StopAt) {
+        analogWrite(RT_M4_PWM, 0);
+        _m4StopAt = 0;
+    }
 }
 
 void Robotrick::motor4For(int speed, uint32_t ms) {
@@ -547,6 +556,20 @@ void Robotrick::liftDown(uint32_t ms) {
     Serial.print(F("[Robotrick] LIFT DOWN ")); Serial.print(ms); Serial.println(F("ms"));
     motor4For(-RT_LIFT_UP_SIGN * RT_LIFT_SPEED, ms);
 }
+
+// ── نسخ غير حابسة: تشغّل الرافعة وترجع فوراً ──────────────
+void Robotrick::liftUpAsync(uint32_t ms) {
+    Serial.print(F("[Robotrick] LIFT UP async ")); Serial.print(ms); Serial.println(F("ms"));
+    motor4(RT_LIFT_UP_SIGN * RT_LIFT_SPEED);
+    _m4StopAt = ms ? (millis() + ms) : 0;   // 0 = تفضل شغّالة لحد liftStop
+}
+void Robotrick::liftDownAsync(uint32_t ms) {
+    Serial.print(F("[Robotrick] LIFT DOWN async ")); Serial.print(ms); Serial.println(F("ms"));
+    motor4(-RT_LIFT_UP_SIGN * RT_LIFT_SPEED);
+    _m4StopAt = ms ? (millis() + ms) : 0;
+}
+void Robotrick::liftStop() { motor4Stop(); }
+bool Robotrick::liftBusy() { return _m4StopAt != 0; }
 
 // ─────────────────────────────────────────────────────
 //  SERVOS — 3 سيرفو على A2/A3/A4، رقمها 1..3
@@ -861,6 +884,7 @@ bool Robotrick::_followLine(uint8_t nJunctions, float cm) {
     uint32_t tPrev = micros(), dbgPrev = 0;
 
     while (millis() < timeout) {
+        _serviceMotor4();   // خدمة الرافعة async أثناء تتبع الخط
         // نقرأ calibrated (0..1000) ونحسب الموقع بأنفسنا — نتجاهل الحساسات الخربانة
         _qtr.readCalibrated(_qtrVals);
 
@@ -1006,6 +1030,7 @@ bool Robotrick::followLine2(float cm) {
     uint32_t timeout    = millis() + RT_LINE_TIMEOUT;
 
     while (millis() < timeout) {
+        _serviceMotor4();   // خدمة الرافعة async أثناء تتبع الخط
         _qtr.readCalibrated(_qtrVals);
 
         long sumW = 0, sumV = 0;
@@ -1110,6 +1135,7 @@ bool Robotrick::_gyroInit() {
 }
 
 void Robotrick::_updateHeading() {
+    _serviceMotor4();           // خدمة الرافعة async بالخلفية (كل حلقات الحركة تنادي هون)
     uint32_t now = micros();
     float dt = (now - _lastMicros) * 1e-6f;
     _lastMicros = now;
