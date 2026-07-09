@@ -56,7 +56,7 @@
 // ── Robot geometry ─────────────────────────────────
 #define RT_WHEEL_DIAMETER_MM   80.0f
 #define RT_WHEEL_BASE_MM      150.0f   // معامل دقة اللف (للمرجع — اللف بالجايرو)
-#define RT_COUNTS_PER_REV      493     // معايرة المسافة: 478×(100/97) — دقيق على 100cm
+#define RT_COUNTS_PER_REV     2013     // الإنكودر اليسار صار 48CPR (كان 12): 493×4.08 — تقديري، عاير على 100cm
 
 // ── Speeds (0–255) ─────────────────────────────────
 #define RT_DRIVE_SPEED   120   // سرعة المشي المستقيم
@@ -70,7 +70,7 @@
 //   1 = GYRO     → تصحيح بالجايرو (الأفضل لو في انزلاق)
 //   2 = ENCODER  → موازنة عدّات اليسار/اليمين (بدون جايرو)
 //   3 = BOTH     → جايرو + إنكودر مع بعض
-#define RT_STRAIGHT_MODE  3
+#define RT_STRAIGHT_MODE  1     // جايرو فقط — موازنة الإنكودر انقلبت بعد ما انبدلت الإنكودرات
 
 // ── Straight-drive heading hold (gyro PD) — يشتغل بالـ MODE 1/3
 #define RT_STRAIGHT_KP    1.8f  // قوة الرجوع للخط المستقيم (زِد = أقوى لكن يبدأ يهتز)
