@@ -41,6 +41,7 @@ void printMenu() {
     Serial.println(F("  y        GYRO TEST (rotate by hand, watch heading)"));
     Serial.println(F("  k        LINE calibrate مرة وحدة (يحفظ EEPROM للأبد)"));
     Serial.println(F("  M <ms>   LINE monitor — حط الروبوت عالخط واقرأ (M 6000)"));
+    Serial.println(F("  C <ms>   STEER check — حرّك الخط وشوف لوين رح يلف (C 10000)"));
     Serial.println(F("  j <n>    follow line to junction #n  (j 1)"));
     Serial.println(F("  m <cm>   follow line for cm          (m 40)"));
     Serial.println(F("  n <cm>   LINE2 خوارزمية بديلة         (n 40)"));
@@ -149,6 +150,11 @@ void handle(char cmd, float val, float val2, float val3) {
         uint32_t ms = (val >= 500) ? (uint32_t)val : 5000;
         Serial.println(F(">> LINE MONITOR — حط الروبوت بالزبط عالخط:"));
         bot.lineMonitor(ms);
+    }
+    else if (cmd == 'C') {   // فحص اتجاه التوجيه — حرّك الخط وراقب السهم
+        uint32_t ms = (val >= 500) ? (uint32_t)val : 10000;
+        Serial.println(F(">> STEER CHECK — حرّك الخط يمين/يسار:"));
+        bot.lineSteerCheck(ms);
     }
     else if (cmd == 'j') {
         int n = (val >= 1) ? (int)val : 1;

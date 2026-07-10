@@ -40,7 +40,7 @@
 #define RT_M4_REVERSE  false   // اقلب لو الرافعة بتتحرك بالاتجاه المعكوس
 // ملاحظة: انكودر M4 على D0/D1 (Serial) — ما نستعمله؛ التحكّم بالوقت.
 #define RT_LIFT_SPEED   200    // سرعة liftUp/liftDown (0..255)
-#define RT_LIFT_UP_SIGN   1    // إذا liftUp بينزل بدل ما يرفع → خليها -1
+#define RT_LIFT_UP_SIGN  -1    // اتجاه الرفع (انقلب: كان liftUp بينزّل → صار -1)
 
 // عكس اتجاه كل جهة (المحركات متقابلة فيزيائياً)
 // إذا محرك لف غلط — اقلب قيمته.
@@ -259,6 +259,7 @@ public:
     void printLineTuning();                               // اطبع القيم الحالية
 
     void lineMonitor(uint32_t ms = 4000);          // اقرأ حيّ: قيم كل حساس + القمة + الموقع (لتعرف النص الحقيقي)
+    void lineSteerCheck(uint32_t ms = 10000);      // فحص اتجاه التوجيه: وين الخط + وين رح يلف (بدون حركة)
 
     uint16_t linePosition();                       // 0..24000 (12000 = بالنص)
     void     lineReadRaw(uint16_t* dest25);        // قراءة خام (بدون calibration)

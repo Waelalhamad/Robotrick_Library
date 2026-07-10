@@ -814,40 +814,109 @@ void Robotrick::lineMonitor(uint32_t ms) {
     }
     float mid = (RT_QTR_N - 1) * 1000.0f / 2.0f;   // النص النظري (=6500 لـ14 حساس)
     Serial.print(F("[Robotrick] LINE MONITOR — النص النظري = ")); Serial.println(mid, 0);
+    Serial.println(F("  RAW = قراءة خام (RC): ~0-100 أبيض/انعكاس قوي، ~2500 = timeout (ولا انعكاس)"));
+    uint16_t raw[RT_QTR_N];
     uint32_t endAt = millis() + ms;
     while (millis() < endAt) {
+        // اقرأ الخام دايماً (هاد اللي بيكشف عطل الحساس/الإضاءة)
+        _qtr.read(raw);
         if (_qtrReady) _qtr.readCalibrated(_qtrVals);
-        else           _qtr.read(_qtrVals);
 
+        // سطر RAW
+        uint16_t rawMin = 65535, rawMax = 0;
+        Serial.print(F("RAW"));
+        for (uint8_t i = 0; i < RT_QTR_N; i++) {
+            Serial.print(' '); Serial.print(raw[i]);
+            if (raw[i] < rawMin) rawMin = raw[i];
+            if (raw[i] > rawMax) rawMax = raw[i];
+        }
+        Serial.print(F("  | min=")); Serial.print(rawMin);
+        Serial.print(F(" max=")); Serial.println(rawMax);
+
+        // سطر CAL (لو في معايرة) + الموقع
+        if (_qtrReady) {
+            int peak = -1; uint16_t peakV = 0; uint32_t sum = 0;
+            for (uint8_t i = 0; i < RT_QTR_N; i++) {
+                sum += _qtrVals[i];
+                if (_qtrVals[i] > peakV) { peakV = _qtrVals[i]; peak = i; }
+            }
+            float wsum = 0, tot = 0;
+            for (int i = 0; i < RT_QTR_N; i++) {
+                if (peak < 0 || abs(i - peak) > RT_LINE_WINDOW) continue;
+                float w = (float)_qtrVals[i] * (float)_qtrVals[i];
+                wsum += w * (i * 1000.0f); tot += w;
+            }
+            float pos = (tot > 0) ? (wsum / tot) : -1;
+            Serial.print(F("CAL"));
+            for (uint8_t i = 0; i < RT_QTR_N; i++) {
+                Serial.print(' ');
+                if (i == peak) Serial.print('*');
+                Serial.print(_qtrVals[i]);
+            }
+            Serial.print(F("  | peak=idx")); Serial.print(peak);
+            Serial.print(F("  pos=")); Serial.print(pos, 0);
+            Serial.print(F("  mid=")); Serial.println(mid, 0);
+        }
+        delay(300);
+    }
+    Serial.println(F("[Robotrick] خلص المونيتور."));
+}
+
+// فحص اتجاه التوجيه — بدون حركة. بيحسب نفس تصحيح المتتبع ويقول:
+// وين الخط (idx/pos)، وأي عجلة رح تتسرّع، ولوين رح يميل الروبوت.
+// الاستعمال: حرّك الخط لجهة بإيدك، ولازم السهم يشير لنفس الجهة (يصحّح باتجاه الخط).
+// لو أشار عكسها → RT_LINE_STEER_SIGN مقلوب.
+void Robotrick::lineSteerCheck(uint32_t ms) {
+    _lineBegin();
+    if (!_qtrReady && !lineLoadCalibration()) {
+        Serial.println(F("[Robotrick] ما في معايرة — اعمل k أول.")); return;
+    }
+    float mid = RT_QTR_CENTER;
+    Serial.println(F("[Robotrick] STEER CHECK — حرّك الخط يمين/يسار وراقب السهم"));
+    Serial.print(F("  STEER_SIGN=")); Serial.print(RT_LINE_STEER_SIGN);
+    Serial.print(F("  CENTER=")); Serial.print((int)mid);
+    Serial.print(F("  base=")); Serial.println(_lineBase);
+    Serial.println(F("  القاعدة: السهم لازم يشير لنفس جهة الخط (يصحّح نحوه)"));
+    uint32_t endAt = millis() + ms;
+    while (millis() < endAt) {
+        _qtr.readCalibrated(_qtrVals);
         int peak = -1; uint16_t peakV = 0; uint32_t sum = 0;
         for (uint8_t i = 0; i < RT_QTR_N; i++) {
+            if (i == RT_QTR_DEAD_1 || i == RT_QTR_DEAD_2) continue;
             sum += _qtrVals[i];
             if (_qtrVals[i] > peakV) { peakV = _qtrVals[i]; peak = i; }
         }
-        // نفس centroid المتتبع: أوزان تربيعية حوالين القمة فقط
         float wsum = 0, tot = 0;
         for (int i = 0; i < RT_QTR_N; i++) {
+            if (i == RT_QTR_DEAD_1 || i == RT_QTR_DEAD_2) continue;
             if (peak < 0 || abs(i - peak) > RT_LINE_WINDOW) continue;
             float w = (float)_qtrVals[i] * (float)_qtrVals[i];
-            wsum += w * (i * 1000.0f);
-            tot  += w;
+            wsum += w * (i * 1000.0f); tot += w;
         }
-        float pos = (tot > 0) ? (wsum / tot) : -1;
+        if (sum < RT_LINE_PRESENT || tot <= 0) {
+            Serial.println(F("  … لا خط (حط الحساس فوق الخط)"));
+            delay(300); continue;
+        }
+        float pos   = wsum / tot;
+        float err   = pos - mid;                         // موجب = خط عند idx أعلى
+        float ratio = fabs(err) / mid; if (ratio > 1) ratio = 1;
+        float kpEff = _lineKp * (1.0f + _lineKpBoost * ratio * ratio);
+        float corr  = RT_LINE_STEER_SIGN * (kpEff * err);
+        int l = constrain((int)(_lineBase + corr), _lineMin, _lineMax);
+        int r = constrain((int)(_lineBase - corr), _lineMin, _lineMax);
 
-        Serial.print(F("S"));
-        for (uint8_t i = 0; i < RT_QTR_N; i++) {
-            Serial.print(' ');
-            if (i == peak) Serial.print('*');            // القمة
-            Serial.print(_qtrVals[i]);
-        }
-        Serial.print(F("  | peak=idx")); Serial.print(peak);
+        Serial.print(F("  peak=idx")); Serial.print(peak);
         Serial.print(F("  pos=")); Serial.print(pos, 0);
-        Serial.print(F(" (")); Serial.print(pos / 1000.0f, 2); Serial.print(F(" حساس)"));
-        Serial.print(F("  mid=")); Serial.print(mid, 0);
-        Serial.print(F("  sum=")); Serial.println(sum);
-        delay(250);
+        Serial.print(err >= 0 ? F(" (خط لجهة idx-الأعلى)") : F(" (خط لجهة idx-الأدنى)"));
+        Serial.print(F("  L=")); Serial.print(l);
+        Serial.print(F(" R=")); Serial.print(r);
+        // l>r → العجلة اليسار أسرع → الروبوت يميل يمين
+        if (l > r + 2)      Serial.println(F("  → يميل يمين ►"));
+        else if (r > l + 2) Serial.println(F("  → ◄ يميل يسار"));
+        else                Serial.println(F("  → مستقيم"));
+        delay(300);
     }
-    Serial.println(F("[Robotrick] خلص المونيتور."));
+    Serial.println(F("[Robotrick] خلص فحص التوجيه."));
 }
 
 bool Robotrick::followLineToJunction(uint8_t nJunctions) { return _followLine(nJunctions, 0); }
