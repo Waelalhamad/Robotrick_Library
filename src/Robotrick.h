@@ -41,6 +41,12 @@
 // ملاحظة: انكودر M4 على D0/D1 (Serial) — ما نستعمله؛ التحكّم بالوقت.
 #define RT_LIFT_SPEED   200    // سرعة liftUp/liftDown (0..255)
 #define RT_LIFT_UP_SIGN  -1    // اتجاه الرفع (انقلب: كان liftUp بينزّل → صار -1)
+// انكودر الرافعة (اختياري): تحكّم بالرفع بالمسافة بدل الوقت.
+//   0 = بالوقت فقط (افتراضي).  1 = فعّل الانكودر.
+//   ⚠️ D0/D1 يتعارضوا مع Serial! لو مفعّل وبتستعمل Serial، بدّل البنات لفاضية.
+#define RT_LIFT_USE_ENCODER  0
+#define RT_M4_ENC_A   0
+#define RT_M4_ENC_B   1
 
 // عكس اتجاه كل جهة (المحركات متقابلة فيزيائياً)
 // إذا محرك لف غلط — اقلب قيمته.
@@ -200,6 +206,20 @@
 // إذا السيرفو بيزحف بطيء وهو المفروض واقف → غيّرها شوي (1490 / 1510)
 #define RT_SERVO_STOP_US 1500
 
+// ── Color sensors (4× TCS34725، DIY bus-gate mux) ──
+// كلهم عنوان 0x29؛ بوابة كل حساس على بن (HIGH = يوصل عالباص)
+#define RT_COLOR_N          4
+#define RT_COLOR1_PIN      13
+#define RT_COLOR2_PIN      10
+#define RT_COLOR3_PIN      11
+#define RT_COLOR4_PIN       9
+#define RT_COLOR_LED_PIN   12    // إضاءة مشتركة (HIGH = ON)
+#define RT_COLOR_ADDR    0x29
+#define RT_COLOR_ATIME   0xC0    // زمن التكامل (~154ms)
+#define RT_COLOR_GAIN    0x01    // 4x
+#define RT_COLOR_AVG        5    // عدد العيّنات للمعدّل (تنعيم)
+#define RT_COLOR_BLACK_C   40    // C تحتها = اسود/معتم (سطوع)
+
 // ── Safety timeouts (ms) ───────────────────────────
 #define RT_MOVE_TIMEOUT  20000
 #define RT_TURN_TIMEOUT   5000
@@ -207,6 +227,21 @@
 // ─────────────────────────────────────────────────────
 //  ███  END CONFIG  ███
 // ─────────────────────────────────────────────────────
+
+// نتيجة تصنيف اللون — احفظها بمتغيّر وقرّر عليها
+enum RTColor {
+    RT_RED, RT_GREEN, RT_BLUE, RT_YELLOW, RT_WHITE, RT_BLACK, RT_UNKNOWN
+};
+
+// قراءة لون خام + نِسب chromaticity (لو بدك تفاصيل)
+struct RTColorReading {
+    uint16_t c, r, g, b;      // الخام
+    float    nr, ng, nb;      // النِسب (مستقلة عن السطوع)
+    RTColor  color;           // التصنيف
+};
+
+// مرجع لون متعلّم (chromaticity)
+struct RTColorRef { float nr, ng, nb; bool set; };
 
 class Robotrick {
 public:
@@ -235,6 +270,9 @@ public:
     void  setTurnTune(float kp, float fastDeg);     // قوة الهبوط + زاوية بداية التبطئة
     void  resetTurnTuning();                        // رجّع سرعات اللف للافتراضي
     void  printTurnTuning();                        // اطبع قيم اللف
+    void  setPivotSpeed(int fast, int slow, int min); // سرعات الـ pivot (سالب = لا تغيّر)
+    void  resetPivotTuning();                       // رجّع سرعات الـ pivot للافتراضي
+    void  printPivotTuning();                       // اطبع قيم الـ pivot
     void  resetDriveTuning();                       // رجّع السرعة والـ PID والاستقامة لقيم CONFIG
     float getDriveSpeed();                          // السرعة الحالية (cm/s)
     void  printDriveTuning();                       // اطبع القيم الحالية
@@ -276,7 +314,11 @@ public:
     void  liftUpAsync(uint32_t ms = 0);      // ارفع بدون انتظار
     void  liftDownAsync(uint32_t ms = 0);    // نزّل بدون انتظار
     void  liftStop();                        // وقّف الرافعة (يلغي أي مؤقّت async)
-    bool  liftBusy();                        // هل الرافعة شغّالة بمؤقّت async؟
+    bool  liftBusy();                        // هل الرافعة شغّالة (وقت/عدّات)؟
+    // خيار الانكودر: لما ON، قيمة liftUpAsync/liftDownAsync = عدّات بدل ms
+    void  setLiftUseEncoder(bool on);        // فعّل/عطّل التحكّم بالانكودر (لايف)
+    long  liftEncoder();                     // قراءة انكودر الرافعة (0 لو معطّل)
+    void  resetLiftEncoder();                // صفّر انكودر الرافعة
 
     // ── Servos (idx = 1..3 على البنات A2/A3/A4) ────
     void  servoWrite(uint8_t idx, int angle);                    // روح للزاوية فوراً (0..180)
@@ -289,6 +331,17 @@ public:
     void  servoStop(uint8_t idx);                                // وقّف سيرفو الدوران (= spin 0)
     void  setServoStop(int us);                                  // عاير نبضة الوقوف (~1500) لحد ما يوقف تماماً
     int   servoAngle(uint8_t idx);                               // آخر زاوية مكتوبة (-1 = غير مفعّل)
+
+    // ── Color sensors (4× TCS34725 — sensor = 1..4) ──
+    RTColor readColor(uint8_t sensor);               // اقرأ لون حساس واحد → احفظه بمتغيّر
+    void    readAllColors(RTColor dst[4]);           // اقرأ الأربعة → مصفوفة [4]
+    bool    readColorRGB(uint8_t sensor, RTColorReading &out);  // خام + نِسب + تصنيف
+    bool    colorPresent(uint8_t sensor);            // هل الحساس موجود؟ (1..4)
+    void    teachColor(RTColor color, uint8_t sensor);  // علّم مرجع لون من حساس (معايرة حيّة)
+    void    resetColorRefs();                        // رجّع مراجع الألوان للقيم الافتراضية
+    void    printColorRefs();                        // اطبع المراجع
+    void    setColorLED(bool on);                    // إضاءة الألوان on/off
+    static const char* colorName(RTColor c);         // اسم اللون (للطباعة)
 
     // ── Low-level (لو احتجت تتحكم يدوي) ────────────
     void  setMotors(int left, int right);   // -255..255 لكل جهة
@@ -316,6 +369,9 @@ private:
     int   _turnFast, _turnSlowMax, _turnSlowMin;   // = RT_TURN_FAST / SLOW_MAX / SLOW_MIN
     float _turnKp, _turnFastDeg;                   // = RT_TURN_KP / FAST_DEG
 
+    // pivot tuning قابلة للتعديل لايف
+    int   _pivotFast, _pivotSlow, _pivotMin;       // = RT_PIVOT_FAST / SLOW / MIN
+
     // line follower
     QTRSensors _qtr;
     uint16_t   _qtrVals[RT_QTR_N];
@@ -330,8 +386,29 @@ private:
     int16_t  _servoPos[RT_SERVO_N];   // آخر زاوية (-1 = ما تحرّك بعد)
     bool     _servoAttached[RT_SERVO_N];
     int      _servoStopUs;            // نبضة الوقوف لسيرفو 360° (تبدأ من RT_SERVO_STOP_US)
-    uint32_t _m4StopAt = 0;           // وقت إيقاف الرافعة async (0 = ما في مؤقّت)
-    void     _serviceMotor4();        // يوقف الرافعة لما يخلص وقتها — يُنادى بالخلفية
+    uint32_t _m4StopAt = 0;           // وقت إيقاف الرافعة async (وضع الوقت)
+    uint8_t  _m4Mode = 0;             // 0=واقف/دايم  1=بالوقت  2=بالانكودر
+    long     _m4TargetCount = 0;      // هدف العدّات (وضع الانكودر)
+    bool     _liftUseEnc = RT_LIFT_USE_ENCODER;   // خيار: انكودر أو وقت (لايف)
+#if RT_LIFT_USE_ENCODER
+    Encoder  _liftEnc{RT_M4_ENC_A, RT_M4_ENC_B};  // انكودر الرافعة (مفعّل بالكومبايل)
+#endif
+    void     _serviceMotor4();        // يوقف الرافعة (وقت/عدّات) — يُنادى بالخلفية
+    void     _liftStartAsync(int speed, uint32_t value, const __FlashStringHelper* tag);
+
+    // color sensors (DIY bus-gate mux)
+    uint8_t     _colorPin[RT_COLOR_N];
+    bool        _colorOk[RT_COLOR_N];
+    RTColorRef  _colorRef[7];          // مراجع الألوان (حسب enum RTColor)
+    void    _colorBegin();
+    void    _colorSelect(int slot);    // شغّل بوابة سلوت واحد
+    void    _colorDeselectAll();
+    bool    _colorAck();
+    bool    _tcsW(uint8_t reg, uint8_t val);
+    uint8_t _tcsR(uint8_t reg);
+    void    _colorConfig();
+    bool    _colorReadAvg(int slot, RTColorReading &out);
+    RTColor _colorClassify(const RTColorReading &rd);
     void     _servoBegin();           // سجّل البنات (بدون attach — كسول)
     bool     _servoEnsure(uint8_t i); // فعّل السيرفو i لو مش مفعّل؛ true=جاهز
     void     _lineParkServos();       // افصل كل السيرفوهات قبل تتبع الخط (ضد تعارض Timer5)

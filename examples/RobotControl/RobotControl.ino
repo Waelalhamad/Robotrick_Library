@@ -586,6 +586,33 @@ void handleLine(char* line) {
     return;
   }
 
+  // ── PIVOTSPEED <fast> <slow> <min> ── (سالب = لا تغيّر)
+  if (strcmp(cmd, "PIVOTSPEED") == 0) {
+    long f, s, m;
+    if (!nextLong(&f)) f = -1;
+    if (!nextLong(&s)) s = -1;
+    if (!nextLong(&m)) m = -1;
+    bot.setPivotSpeed((int)f, (int)s, (int)m);
+    Serial.println(F("ACK PIVOTSPEED"));
+    return;
+  }
+
+  // ── PIVOTRESET ──
+  if (strcmp(cmd, "PIVOTRESET") == 0) {
+    bot.resetPivotTuning();
+    Serial.println(F("ACK PIVOTRESET"));
+    return;
+  }
+
+  // ── LIFTENC <0|1> ── (خيار انكودر الرافعة)
+  if (strcmp(cmd, "LIFTENC") == 0) {
+    long v;
+    if (!nextLong(&v)) { Serial.println(F("ERR LIFTENC needs <0|1>")); return; }
+    bot.setLiftUseEncoder(v >= 1);
+    Serial.println(F("ACK LIFTENC"));
+    return;
+  }
+
   // ── RESETH ── (non-blocking)
   if (strcmp(cmd, "RESETH") == 0) {
     Serial.println(F("ACK RESETH"));

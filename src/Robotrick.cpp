@@ -22,7 +22,8 @@ Robotrick::Robotrick()
       _lineSlow(RT_LINE_SLOW), _lineDeadband(RT_LINE_DEADBAND),
       _lineKp(RT_LINE_KP), _lineKd(RT_LINE_KD), _lineKpBoost(RT_LINE_KP_BOOST),
       _turnFast(RT_TURN_FAST), _turnSlowMax(RT_TURN_SLOW_MAX), _turnSlowMin(RT_TURN_SLOW_MIN),
-      _turnKp(RT_TURN_KP), _turnFastDeg(RT_TURN_FAST_DEG) {}
+      _turnKp(RT_TURN_KP), _turnFastDeg(RT_TURN_FAST_DEG),
+      _pivotFast(_pivotFast), _pivotSlow(_pivotSlow), _pivotMin(_pivotMin) {}
 
 // ─────────────────────────────────────────────────────
 //  SETUP
@@ -43,6 +44,7 @@ bool Robotrick::begin(uint32_t baud) {
     analogWrite(RT_M4_PWM, 0);
 
     _servoBegin();   // سجّل بنات السيرفو (يتفعّلوا أول ما تستعملهم)
+    _colorBegin();   // بنات + مراجع حساسات الألوان (بعد Wire.begin)
 
     bool ok = _gyroInit();
     if (!ok) {
@@ -214,6 +216,28 @@ void Robotrick::printTurnTuning() {
     Serial.print(F("  slowMin=")); Serial.println(_turnSlowMin);
     Serial.print(F("  Kp=")); Serial.print(_turnKp, 2);
     Serial.print(F("  fastDeg=")); Serial.println(_turnFastDeg, 1);
+}
+
+// ── Pivot speed tuning (لايف — بتأثّر على pivot مباشرة) ──────
+void Robotrick::setPivotSpeed(int fast, int slow, int min) {
+    if (fast >= 0) _pivotFast = constrain(fast, 0, 255);
+    if (slow >= 0) _pivotSlow = constrain(slow, 0, 255);
+    if (min  >= 0) _pivotMin  = constrain(min,  0, 255);
+    Serial.print(F("[Robotrick] pivotSpeed fast=")); Serial.print(_pivotFast);
+    Serial.print(F("  slow=")); Serial.print(_pivotSlow);
+    Serial.print(F("  min=")); Serial.println(_pivotMin);
+}
+
+void Robotrick::resetPivotTuning() {
+    _pivotFast = RT_PIVOT_FAST; _pivotSlow = RT_PIVOT_SLOW; _pivotMin = RT_PIVOT_MIN;
+    Serial.println(F("[Robotrick] pivot tuning RESET to defaults"));
+    printPivotTuning();
+}
+
+void Robotrick::printPivotTuning() {
+    Serial.print(F("[Robotrick] --- pivot --- fast=")); Serial.print(_pivotFast);
+    Serial.print(F("  slow=")); Serial.print(_pivotSlow);
+    Serial.print(F("  min=")); Serial.println(_pivotMin);
 }
 
 float Robotrick::getDriveSpeed() { return _driveSpeed; }
@@ -480,8 +504,8 @@ void Robotrick::pivot(char wheel, float deg) {
     if (slowStart < 0) slowStart = 0;
 
     // Phase 1: سرعة كاملة — عجلة وحدة، التانية = 0
-    if (useLeft) { _spinL(sgn * RT_PIVOT_FAST); _spinR(0); }
-    else         { _spinR(sgn * RT_PIVOT_FAST); _spinL(0); }
+    if (useLeft) { _spinL(sgn * _pivotFast); _spinR(0); }
+    else         { _spinR(sgn * _pivotFast); _spinL(0); }
 
     uint32_t timeout = millis() + RT_TURN_TIMEOUT;
     while (millis() < timeout) {
@@ -494,7 +518,7 @@ void Robotrick::pivot(char wheel, float deg) {
         _updateHeading();
         float err = targetMag - fabs(_heading);
         if (err <= RT_PIVOT_STOP_DEG) break;
-        int spd = constrain((int)(_turnKp * err), RT_PIVOT_MIN, RT_PIVOT_SLOW);
+        int spd = constrain((int)(_turnKp * err), _pivotMin, _pivotSlow);
         if (useLeft) { _spinL(sgn * spd); _spinR(0); }
         else         { _spinR(sgn * spd); _spinL(0); }
     }
@@ -529,15 +553,43 @@ void Robotrick::motor4(int speed) {
 
 void Robotrick::motor4Stop() {
     analogWrite(RT_M4_PWM, 0);
-    _m4StopAt = 0;               // ألغِ أي مؤقّت async
+    _m4StopAt = 0; _m4Mode = 0;   // ألغِ أي async (وقت أو عدّات)
 }
 
-// يوقف الرافعة تلقائياً لما يخلص وقتها. بينادى من update() ومن حلقات الحركة.
+// يوقف الرافعة تلقائياً: بالوقت (mode 1) أو بالعدّات (mode 2). خلفية.
 void Robotrick::_serviceMotor4() {
-    if (_m4StopAt && millis() >= _m4StopAt) {
-        analogWrite(RT_M4_PWM, 0);
-        _m4StopAt = 0;
+    if (_m4Mode == 1) {                              // بالوقت
+        if (millis() >= _m4StopAt) { analogWrite(RT_M4_PWM, 0); _m4Mode = 0; }
     }
+#if RT_LIFT_USE_ENCODER
+    else if (_m4Mode == 2) {                         // بالانكودر
+        if (labs(_liftEnc.read()) >= _m4TargetCount) { analogWrite(RT_M4_PWM, 0); _m4Mode = 0; }
+    }
+#endif
+}
+
+void Robotrick::setLiftUseEncoder(bool on) {
+#if RT_LIFT_USE_ENCODER
+    _liftUseEnc = on;
+    Serial.print(F("[Robotrick] lift encoder mode = ")); Serial.println(on ? F("ON") : F("OFF"));
+#else
+    (void)on;
+    Serial.println(F("[Robotrick] انكودر الرافعة مو مفعّل — خلّي RT_LIFT_USE_ENCODER=1 وأعد الكومبايل"));
+#endif
+}
+
+long Robotrick::liftEncoder() {
+#if RT_LIFT_USE_ENCODER
+    return _liftEnc.read();
+#else
+    return 0;
+#endif
+}
+
+void Robotrick::resetLiftEncoder() {
+#if RT_LIFT_USE_ENCODER
+    _liftEnc.write(0);
+#endif
 }
 
 void Robotrick::motor4For(int speed, uint32_t ms) {
@@ -558,18 +610,30 @@ void Robotrick::liftDown(uint32_t ms) {
 }
 
 // ── نسخ غير حابسة: تشغّل الرافعة وترجع فوراً ──────────────
-void Robotrick::liftUpAsync(uint32_t ms) {
-    Serial.print(F("[Robotrick] LIFT UP async ")); Serial.print(ms); Serial.println(F("ms"));
-    motor4(RT_LIFT_UP_SIGN * RT_LIFT_SPEED);
-    _m4StopAt = ms ? (millis() + ms) : 0;   // 0 = تفضل شغّالة لحد liftStop
+//  القيمة (value): عادةً ms. لكن لو خيار الانكودر ON → value = عدّات.
+//  value=0 → تفضل شغّالة لحد liftStop.
+void Robotrick::_liftStartAsync(int speed, uint32_t value, const __FlashStringHelper* tag) {
+    motor4(speed);
+    if (value == 0) { _m4StopAt = 0; _m4Mode = 0;      // دايم
+        Serial.print(F("[Robotrick] ")); Serial.print(tag); Serial.println(F(" (دايم)")); return; }
+#if RT_LIFT_USE_ENCODER
+    if (_liftUseEnc) {                                   // بالعدّات
+        _liftEnc.write(0); _m4TargetCount = (long)value; _m4Mode = 2;
+        Serial.print(F("[Robotrick] ")); Serial.print(tag);
+        Serial.print(value); Serial.println(F(" counts")); return;
+    }
+#endif
+    _m4StopAt = millis() + value; _m4Mode = 1;          // بالوقت
+    Serial.print(F("[Robotrick] ")); Serial.print(tag); Serial.print(value); Serial.println(F("ms"));
 }
-void Robotrick::liftDownAsync(uint32_t ms) {
-    Serial.print(F("[Robotrick] LIFT DOWN async ")); Serial.print(ms); Serial.println(F("ms"));
-    motor4(-RT_LIFT_UP_SIGN * RT_LIFT_SPEED);
-    _m4StopAt = ms ? (millis() + ms) : 0;
+void Robotrick::liftUpAsync(uint32_t value) {
+    _liftStartAsync(RT_LIFT_UP_SIGN * RT_LIFT_SPEED, value, F("LIFT UP async "));
+}
+void Robotrick::liftDownAsync(uint32_t value) {
+    _liftStartAsync(-RT_LIFT_UP_SIGN * RT_LIFT_SPEED, value, F("LIFT DOWN async "));
 }
 void Robotrick::liftStop() { motor4Stop(); }
-bool Robotrick::liftBusy() { return _m4StopAt != 0; }
+bool Robotrick::liftBusy() { return _m4Mode != 0; }
 
 // ─────────────────────────────────────────────────────
 //  SERVOS — 3 سيرفو على A2/A3/A4، رقمها 1..3
@@ -698,6 +762,172 @@ void Robotrick::_lineParkServos() {
         if (_servoAttached[i]) { _servo[i].detach(); _servoAttached[i] = false; any = true; }
     }
     if (any) Serial.println(F("[Robotrick] servos parked (فُصلوا) أثناء تتبع الخط"));
+}
+
+// ═════════════════════════════════════════════════════
+//  COLOR SENSORS — 4× TCS34725 على DIY bus-gate mux
+//  كلهم 0x29؛ نشغّل بوابة سلوت واحد بلحظة. التصنيف بالـ
+//  chromaticity (نِسب مستقلة عن السطوع) + أقرب لون متعلّم.
+// ═════════════════════════════════════════════════════
+#define TCS_CMD_    0x80
+#define TCS_AUTO_   0x20
+#define TCS_ENABLE_ 0x00
+#define TCS_ATIME_  0x01
+#define TCS_CTRL_   0x0F
+#define TCS_ID_     0x12
+#define TCS_STAT_   0x13
+#define TCS_CDATAL_ 0x14
+#define TCS_PON_    0x01
+#define TCS_AEN_    0x02
+
+// مراجع الألوان الافتراضية (مقاسة على الروبوت) — حسب ترتيب enum RTColor
+static const RTColorRef COLOR_DEFAULT[7] = {
+    { 0.54f, 0.22f, 0.24f, true  },   // RT_RED
+    { 0.23f, 0.43f, 0.34f, true  },   // RT_GREEN
+    { 0.18f, 0.36f, 0.47f, true  },   // RT_BLUE
+    { 0.47f, 0.34f, 0.20f, true  },   // RT_YELLOW
+    { 0.00f, 0.00f, 0.00f, false },   // RT_WHITE (غير مقاس بعد)
+    { 0.25f, 0.36f, 0.39f, true  },   // RT_BLACK
+    { 0.00f, 0.00f, 0.00f, false },   // RT_UNKNOWN
+};
+
+void Robotrick::_colorSelect(int slot) {
+    for (uint8_t i = 0; i < RT_COLOR_N; i++)
+        digitalWrite(_colorPin[i], (i == slot) ? HIGH : LOW);
+    delayMicroseconds(600);          // settle بعد تبديل الـ FET
+}
+void Robotrick::_colorDeselectAll() {
+    for (uint8_t i = 0; i < RT_COLOR_N; i++) digitalWrite(_colorPin[i], LOW);
+}
+bool Robotrick::_colorAck() {
+    Wire.beginTransmission(RT_COLOR_ADDR);
+    return Wire.endTransmission() == 0;
+}
+bool Robotrick::_tcsW(uint8_t reg, uint8_t val) {
+    Wire.beginTransmission(RT_COLOR_ADDR);
+    Wire.write(TCS_CMD_ | reg); Wire.write(val);
+    return Wire.endTransmission() == 0;
+}
+uint8_t Robotrick::_tcsR(uint8_t reg) {
+    Wire.beginTransmission(RT_COLOR_ADDR);
+    Wire.write(TCS_CMD_ | reg);
+    if (Wire.endTransmission(false) != 0) return 0xFF;
+    Wire.requestFrom((uint8_t)RT_COLOR_ADDR, (uint8_t)1);
+    return Wire.available() ? Wire.read() : 0xFF;
+}
+void Robotrick::_colorConfig() {
+    _tcsW(TCS_ENABLE_, TCS_PON_); delay(3);
+    _tcsW(TCS_ATIME_,  RT_COLOR_ATIME);
+    _tcsW(TCS_CTRL_,   RT_COLOR_GAIN);
+    _tcsW(TCS_ENABLE_, TCS_PON_ | TCS_AEN_);
+}
+
+void Robotrick::_colorBegin() {
+    _colorPin[0] = RT_COLOR1_PIN; _colorPin[1] = RT_COLOR2_PIN;
+    _colorPin[2] = RT_COLOR3_PIN; _colorPin[3] = RT_COLOR4_PIN;
+    for (uint8_t i = 0; i < RT_COLOR_N; i++) {
+        pinMode(_colorPin[i], OUTPUT); digitalWrite(_colorPin[i], LOW);
+        _colorOk[i] = false;
+    }
+    pinMode(RT_COLOR_LED_PIN, OUTPUT); digitalWrite(RT_COLOR_LED_PIN, HIGH); // إضاءة ON
+    for (uint8_t i = 0; i < 7; i++) _colorRef[i] = COLOR_DEFAULT[i];
+
+    // فحص + تهيئة كل سلوت
+    uint8_t found = 0;
+    for (uint8_t s = 0; s < RT_COLOR_N; s++) {
+        _colorSelect(s);
+        if (_colorAck()) {
+            uint8_t id = _tcsR(TCS_ID_);
+            if (id == 0x44 || id == 0x4D || id == 0x10) { _colorConfig(); _colorOk[s] = true; found++; }
+        }
+    }
+    _colorDeselectAll();
+    Serial.print(F("[Robotrick] color sensors: ")); Serial.print(found); Serial.println(F("/4 موجود"));
+}
+
+bool Robotrick::_colorReadAvg(int slot, RTColorReading &out) {
+    _colorSelect(slot);
+    if (!_colorAck()) { _colorDeselectAll(); return false; }
+    uint32_t sc = 0, sr = 0, sg = 0, sb = 0; uint8_t n = 0;
+    for (uint8_t k = 0; k < RT_COLOR_AVG; k++) {
+        uint32_t t0 = millis();
+        while (millis() - t0 < 250) { if (_tcsR(TCS_STAT_) & 0x01) break; delay(5); }
+        Wire.beginTransmission(RT_COLOR_ADDR);
+        Wire.write(TCS_CMD_ | TCS_AUTO_ | TCS_CDATAL_);
+        if (Wire.endTransmission(false) != 0) continue;
+        Wire.requestFrom((uint8_t)RT_COLOR_ADDR, (uint8_t)8);
+        if (Wire.available() < 8) continue;
+        uint8_t d[8]; for (uint8_t i = 0; i < 8; i++) d[i] = Wire.read();
+        sc += (uint16_t)(d[1] << 8) | d[0]; sr += (uint16_t)(d[3] << 8) | d[2];
+        sg += (uint16_t)(d[5] << 8) | d[4]; sb += (uint16_t)(d[7] << 8) | d[6];
+        n++;
+    }
+    _colorDeselectAll();
+    if (n == 0) return false;
+    out.c = sc / n; out.r = sr / n; out.g = sg / n; out.b = sb / n;
+    float s = (float)out.r + out.g + out.b; if (s < 1) s = 1;
+    out.nr = out.r / s; out.ng = out.g / s; out.nb = out.b / s;
+    out.color = _colorClassify(out);
+    return true;
+}
+
+RTColor Robotrick::_colorClassify(const RTColorReading &rd) {
+    if (rd.c < RT_COLOR_BLACK_C) return RT_BLACK;      // معتم = اسود بالسطوع
+    int best = -1; float bestD = 1e9;
+    for (uint8_t i = 0; i < 6; i++) {
+        if (!_colorRef[i].set) continue;
+        float d = sq(rd.nr - _colorRef[i].nr) + sq(rd.ng - _colorRef[i].ng) + sq(rd.nb - _colorRef[i].nb);
+        if (d < bestD) { bestD = d; best = i; }
+    }
+    return (best < 0) ? RT_UNKNOWN : (RTColor)best;
+}
+
+RTColor Robotrick::readColor(uint8_t sensor) {
+    if (sensor < 1 || sensor > RT_COLOR_N) return RT_UNKNOWN;
+    RTColorReading rd;
+    if (!_colorReadAvg(sensor - 1, rd)) return RT_UNKNOWN;
+    return rd.color;
+}
+void Robotrick::readAllColors(RTColor dst[4]) {
+    for (uint8_t s = 0; s < 4; s++) dst[s] = readColor(s + 1);
+}
+bool Robotrick::readColorRGB(uint8_t sensor, RTColorReading &out) {
+    if (sensor < 1 || sensor > RT_COLOR_N) return false;
+    return _colorReadAvg(sensor - 1, out);
+}
+bool Robotrick::colorPresent(uint8_t sensor) {
+    return (sensor >= 1 && sensor <= RT_COLOR_N) ? _colorOk[sensor - 1] : false;
+}
+void Robotrick::teachColor(RTColor color, uint8_t sensor) {
+    if ((int)color < 0 || (int)color >= 6) { Serial.println(F("[color] لون غير صالح")); return; }
+    if (sensor < 1 || sensor > RT_COLOR_N)  { Serial.println(F("[color] حساس 1..4")); return; }
+    RTColorReading rd;
+    if (!_colorReadAvg(sensor - 1, rd)) { Serial.println(F("[color] فشلت القراءة")); return; }
+    _colorRef[color] = { rd.nr, rd.ng, rd.nb, true };
+    Serial.print(F("[color] علّمت ")); Serial.print(colorName(color));
+    Serial.print(F(" من S")); Serial.print(sensor); Serial.print(F(": "));
+    Serial.print(rd.nr, 3); Serial.print(' '); Serial.print(rd.ng, 3); Serial.print(' '); Serial.println(rd.nb, 3);
+}
+void Robotrick::resetColorRefs() {
+    for (uint8_t i = 0; i < 7; i++) _colorRef[i] = COLOR_DEFAULT[i];
+    Serial.println(F("[color] refs reset للقيم الافتراضية"));
+}
+void Robotrick::printColorRefs() {
+    Serial.println(F("[color] المراجع:"));
+    for (uint8_t i = 0; i < 6; i++) {
+        Serial.print(F("  ")); Serial.print(colorName((RTColor)i)); Serial.print(F(": "));
+        if (_colorRef[i].set) {
+            Serial.print(_colorRef[i].nr, 3); Serial.print(' ');
+            Serial.print(_colorRef[i].ng, 3); Serial.print(' ');
+            Serial.println(_colorRef[i].nb, 3);
+        } else Serial.println(F("— غير متعلّم"));
+    }
+}
+void Robotrick::setColorLED(bool on) { digitalWrite(RT_COLOR_LED_PIN, on ? HIGH : LOW); }
+
+const char* Robotrick::colorName(RTColor c) {
+    static const char* names[7] = { "احمر", "اخضر", "ازرق", "اصفر", "ابيض", "اسود", "؟" };
+    return names[((int)c >= 0 && (int)c <= 6) ? (int)c : 6];
 }
 
 int Robotrick::servoAngle(uint8_t idx) {

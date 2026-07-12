@@ -42,6 +42,8 @@ void printMenu() {
     Serial.println(F("  k        LINE calibrate مرة وحدة (يحفظ EEPROM للأبد)"));
     Serial.println(F("  M <ms>   LINE monitor — حط الروبوت عالخط واقرأ (M 6000)"));
     Serial.println(F("  C <ms>   STEER check — حرّك الخط وشوف لوين رح يلف (C 10000)"));
+    Serial.println(F("  E [n]    اقرأ لون الحساس n (1..4) أو الأربعة (E)"));
+    Serial.println(F("  Y <لون> <حساس>  عاير لون (Y 1 3 = احمر من S3)  D اطبع  F رجّع"));
     Serial.println(F("  j <n>    follow line to junction #n  (j 1)"));
     Serial.println(F("  m <cm>   follow line for cm          (m 40)"));
     Serial.println(F("  n <cm>   LINE2 خوارزمية بديلة         (n 40)"));
@@ -49,6 +51,8 @@ void printMenu() {
     Serial.println(F("  4 <spd>  motor4 (رافعة) بسرعة spd (-255..255، 0=وقوف)"));
     Serial.println(F("  u <ms>   liftUp مدة ms       i <ms>  liftDown  (حابسة)"));
     Serial.println(F("  U <ms>   liftUp async        I <ms>  liftDown async  0  وقّف الرافعة"));
+    Serial.println(F("  B <0|1>  انكودر الرافعة (1=قيمة U/I تصير عدّات بدل ms)"));
+    Serial.println(F("  V <fast> <slow> <min>  سرعات الـ pivot (V لحاله = اطبع)"));
     Serial.println(F("  s <i> <a>  servo فوري (s 1 90)   v <i> <a>  servo ناعم"));
     Serial.println(F("  d <i>    فصل السيرفو (d 1)"));
     Serial.println(F("  S <i> <spd>  سيرفو 360° دوران -100..100 (S 1 0 = وقوف)"));
@@ -78,6 +82,7 @@ void printEnc() {
     Serial.print(F("  encL=")); Serial.print(L);
     Serial.print(F("  encR=")); Serial.print(R);
     if (L != 0) { Serial.print(F("  R/L=")); Serial.print((float)R / (float)L, 2); }
+    Serial.print(F("  liftEnc=")); Serial.print(bot.liftEncoder());
     Serial.println();
 }
 
@@ -266,6 +271,47 @@ void handle(char cmd, float val, float val2, float val3) {
     }
     else if (cmd == 'A') {   // رجّع قيم اللف للافتراضي
         bot.resetTurnTuning();
+    }
+    else if (cmd == 'V') {   // سرعات الـ pivot:  V <fast> <slow> <min>  (بدون أرقام = اطبع)
+        if (val <= 0 && val2 <= 0 && val3 <= 0) bot.printPivotTuning();
+        else bot.setPivotSpeed((int)val, (int)val2, (int)val3);
+    }
+    else if (cmd == 'B') {   // خيار انكودر الرافعة:  B 1 = ON، B 0 = OFF
+        bot.setLiftUseEncoder(val >= 1);
+    }
+    else if (cmd == 'E') {   // اقرأ الألوان:  E (الأربعة) أو E <رقم حساس 1..4>
+        if (val >= 1 && val <= 4) {
+            RTColorReading rd;
+            Serial.print(F(">> color S")); Serial.print((int)val); Serial.print(F(": "));
+            if (bot.readColorRGB((uint8_t)val, rd)) {
+                Serial.print(F("C=")); Serial.print(rd.c);
+                Serial.print(F(" nr=")); Serial.print(rd.nr, 2);
+                Serial.print(F(" ng=")); Serial.print(rd.ng, 2);
+                Serial.print(F(" nb=")); Serial.print(rd.nb, 2);
+                Serial.print(F(" → ")); Serial.println(bot.colorName(rd.color));
+            } else Serial.println(F("مفقود/فشل"));
+        } else {
+            Serial.println(F(">> كل الألوان:"));
+            RTColor cs[4]; bot.readAllColors(cs);
+            for (uint8_t i = 0; i < 4; i++) {
+                Serial.print(F("  S")); Serial.print(i + 1);
+                Serial.print(F(": ")); Serial.println(bot.colorName(cs[i]));
+            }
+        }
+    }
+    else if (cmd == 'Y') {   // عاير لون:  Y <لون 1..6> <حساس 1..4>   (1احمر..6اسود)
+        int col = (int)val;      // 1احمر 2اخضر 3ازرق 4اصفر 5ابيض 6اسود
+        int sen = (int)val2;
+        if (col >= 1 && col <= 6 && sen >= 1 && sen <= 4)
+            bot.teachColor((RTColor)(col - 1), (uint8_t)sen);
+        else
+            Serial.println(F("  استعمال: Y <لون 1..6> <حساس 1..4>"));
+    }
+    else if (cmd == 'D') {   // اطبع مراجع الألوان
+        bot.printColorRefs();
+    }
+    else if (cmd == 'F') {   // رجّع مراجع الألوان للافتراضي
+        bot.resetColorRefs();
     }
     else if (cmd == 'x') {
         bot.stop();
