@@ -312,6 +312,8 @@ public:
     void  motor4Stop();
     void  liftUp(uint32_t ms);               // ارفع الرافعة مدة (ms) — blocking (ينطر يخلص)
     void  liftDown(uint32_t ms);             // نزّل الرافعة مدة (ms) — blocking
+    void  liftUpBy(long counts);             // ارفع عدد عدّات — blocking (يوقف لحاله، بدون update)
+    void  liftDownBy(long counts);           // نزّل عدد عدّات — blocking
     // نسخ غير حابسة: تبدأ وترجع فوراً، وتوقف لحالها بعد ms (0 = تفضل شغّالة).
     // لازم تنادي update() باللوب (أو تعمل حركة تانية) حتى توقف بوقتها.
     void  liftUpAsync(uint32_t ms = 0);      // ارفع بدون انتظار

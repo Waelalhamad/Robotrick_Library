@@ -52,6 +52,7 @@ void printMenu() {
     Serial.println(F("  u <ms>   liftUp مدة ms       i <ms>  liftDown  (حابسة)"));
     Serial.println(F("  U <ms>   liftUp async        I <ms>  liftDown async  0  وقّف الرافعة"));
     Serial.println(F("  B <0|1>  انكودر الرافعة (1=قيمة U/I تصير عدّات بدل ms)"));
+    Serial.println(F("  8 <counts> liftUpBy   9 <counts> liftDownBy  (blocking بالعدّات، يوقف لحاله)"));
     Serial.println(F("  V <fast> <slow> <min>  سرعات الـ pivot (V لحاله = اطبع)"));
     Serial.println(F("  s <i> <a>  servo فوري (s 1 90)   v <i> <a>  servo ناعم"));
     Serial.println(F("  d <i>    فصل السيرفو (d 1)"));
@@ -206,6 +207,14 @@ void handle(char cmd, float val, float val2, float val3) {
     else if (cmd == '0') {   // وقّف الرافعة (يلغي async)
         Serial.println(F(">> lift STOP"));
         bot.liftStop();
+    }
+    else if (cmd == '8') {   // رافعة فوق بالعدّات — blocking:  8 <counts>
+        Serial.print(F(">> liftUpBy ")); Serial.println((long)val);
+        bot.liftUpBy((long)val);
+    }
+    else if (cmd == '9') {   // رافعة تحت بالعدّات — blocking:  9 <counts>
+        Serial.print(F(">> liftDownBy ")); Serial.println((long)val);
+        bot.liftDownBy((long)val);
     }
     else if (cmd == 's') {   // servo فوري:  s <idx> <angle>
         Serial.print(F(">> servo ")); Serial.print((int)val);

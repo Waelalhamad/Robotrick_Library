@@ -609,6 +609,34 @@ void Robotrick::liftDown(uint32_t ms) {
     motor4For(-RT_LIFT_UP_SIGN * RT_LIFT_SPEED, ms);
 }
 
+// blocking بالعدّات — يوقف لحاله بدون ما تنادي update()
+void Robotrick::liftUpBy(long counts) {
+#if RT_LIFT_USE_ENCODER
+    Serial.print(F("[Robotrick] LIFT UP by ")); Serial.print(counts); Serial.println(F(" counts"));
+    _liftEnc.write(0);
+    motor4(RT_LIFT_UP_SIGN * RT_LIFT_SPEED);
+    uint32_t endT = millis() + RT_MOVE_TIMEOUT;
+    while (labs(_liftEnc.read()) < counts && millis() < endT) { }   // poll الانكودر
+    motor4Stop();
+#else
+    (void)counts;
+    Serial.println(F("[Robotrick] انكودر الرافعة مو مفعّل — استعمل liftUp(ms)"));
+#endif
+}
+void Robotrick::liftDownBy(long counts) {
+#if RT_LIFT_USE_ENCODER
+    Serial.print(F("[Robotrick] LIFT DOWN by ")); Serial.print(counts); Serial.println(F(" counts"));
+    _liftEnc.write(0);
+    motor4(-RT_LIFT_UP_SIGN * RT_LIFT_SPEED);
+    uint32_t endT = millis() + RT_MOVE_TIMEOUT;
+    while (labs(_liftEnc.read()) < counts && millis() < endT) { }
+    motor4Stop();
+#else
+    (void)counts;
+    Serial.println(F("[Robotrick] انكودر الرافعة مو مفعّل — استعمل liftDown(ms)"));
+#endif
+}
+
 // ── نسخ غير حابسة: تشغّل الرافعة وترجع فوراً ──────────────
 //  القيمة (value): عادةً ms. لكن لو خيار الانكودر ON → value = عدّات.
 //  value=0 → تفضل شغّالة لحد liftStop.

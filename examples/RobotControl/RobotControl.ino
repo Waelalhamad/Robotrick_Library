@@ -394,6 +394,26 @@ void handleLine(char* line) {
     return;
   }
 
+  // ── LIFTUPBY <counts> ── (رفع بالعدّات، blocking — يوقف لحاله)
+  if (strcmp(cmd, "LIFTUPBY") == 0) {
+    long c;
+    if (!nextLong(&c)) { Serial.println(F("ERR LIFTUPBY needs <counts>")); return; }
+    Serial.println(F("ACK LIFTUPBY"));
+    busy = true; bot.liftUpBy(c); busy = false;
+    Serial.println(F("DONE LIFTUPBY"));
+    return;
+  }
+
+  // ── LIFTDOWNBY <counts> ──
+  if (strcmp(cmd, "LIFTDOWNBY") == 0) {
+    long c;
+    if (!nextLong(&c)) { Serial.println(F("ERR LIFTDOWNBY needs <counts>")); return; }
+    Serial.println(F("ACK LIFTDOWNBY"));
+    busy = true; bot.liftDownBy(c); busy = false;
+    Serial.println(F("DONE LIFTDOWNBY"));
+    return;
+  }
+
   // ── SERVO <idx> <angle> ── (jump instantly, non-blocking)
   if (strcmp(cmd, "SERVO") == 0) {
     long idx, ang;
