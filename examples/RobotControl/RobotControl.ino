@@ -652,6 +652,15 @@ void handleLine(char* line) {
     return;
   }
 
+  // ── DIST ── (اقرأ حساسات المسافة Sharp)
+  if (strcmp(cmd, "DIST") == 0) {
+    Serial.print(F("DIST "));
+    Serial.print(bot.readDistance(1), 1); Serial.print(' ');
+    Serial.print(bot.readDistance(2), 1); Serial.println(F(" cm"));
+    Serial.println(F("ACK DIST"));
+    return;
+  }
+
   // ── COLORSAVE / COLORLOAD / COLORPRINT ──
   if (strcmp(cmd, "COLORSAVE")  == 0) { bot.colorSaveCalibration(); Serial.println(F("ACK COLORSAVE"));  return; }
   if (strcmp(cmd, "COLORLOAD")  == 0) { bot.colorLoadCalibration(); Serial.println(F("ACK COLORLOAD"));  return; }

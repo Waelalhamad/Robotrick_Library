@@ -43,6 +43,7 @@ void printMenu() {
     Serial.println(F("  M <ms>   LINE monitor — حط الروبوت عالخط واقرأ (M 6000)"));
     Serial.println(F("  C <ms>   STEER check — حرّك الخط وشوف لوين رح يلف (C 10000)"));
     Serial.println(F("  E [n]    اقرأ لون الحساس n (1..4) أو الأربعة (E)"));
+    Serial.println(F("  X        اقرأ حساسات المسافة (Sharp A5/A6) بالسم + خام"));
     Serial.println(F("  Y        ★ معايرة الألوان الموجّهة (لون-لون + حفظ EEPROM) — الأسهل"));
     Serial.println(F("  Y <لون> <حساس>  علّم لون واحد (Y 1 3)   D اطبع   F رجّع"));
     Serial.println(F("  j <n>    follow line to junction #n  (j 1)"));
@@ -322,6 +323,14 @@ void handle(char cmd, float val, float val2, float val3) {
     }
     else if (cmd == 'F') {   // رجّع مراجع الألوان للافتراضي
         bot.resetColorRefs();
+    }
+    else if (cmd == 'X') {   // اقرأ حساسات المسافة (Sharp)
+        for (uint8_t s = 1; s <= 2; s++) {
+            Serial.print(F("  dist S")); Serial.print(s);
+            Serial.print(F(" = ")); Serial.print(bot.readDistance(s), 1);
+            Serial.print(F(" cm  (raw ")); Serial.print(bot.readDistanceRaw(s));
+            Serial.println(F(")"));
+        }
     }
     else if (cmd == 'x') {
         bot.stop();

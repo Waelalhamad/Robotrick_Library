@@ -1041,6 +1041,33 @@ void Robotrick::printColor(uint8_t sensor) {
     Serial.print(F(" = ")); Serial.println(colorName(c));
 }
 
+// ─────────────────────────────────────────────────────
+//  SHARP IR DISTANCE (GP2Y0A41SK0F) — 4..30cm تناظري
+//  الخرج غير خطّي: v ~ 1/distance. نحوّل: cm = A * v^B.
+//  ⚠️ تحت 4cm القراءة تنعكس (تعطي مسافة أكبر) — لا تعتمد عليها.
+// ─────────────────────────────────────────────────────
+float Robotrick::readDistance(uint8_t sensor) {
+    if (sensor < 1 || sensor > RT_DIST_N) return -1;
+    uint8_t pin = (sensor == 1) ? RT_DIST1_PIN : RT_DIST2_PIN;
+    long sum = 0;
+    for (uint8_t i = 0; i < RT_DIST_AVG; i++) sum += analogRead(pin);
+    float v = (sum / (float)RT_DIST_AVG) * (RT_DIST_VREF / 1023.0f);
+    if (v < 0.05f) return RT_DIST_MAX;            // فولت ~0 = بعيد/لا شي
+    float cm = RT_DIST_A * pow(v, RT_DIST_B);
+    return constrain(cm, RT_DIST_MIN, RT_DIST_MAX);
+}
+
+int Robotrick::readDistanceRaw(uint8_t sensor) {
+    if (sensor < 1 || sensor > RT_DIST_N) return -1;
+    uint8_t pin = (sensor == 1) ? RT_DIST1_PIN : RT_DIST2_PIN;
+    return analogRead(pin);
+}
+
+bool Robotrick::distanceWithin(uint8_t sensor, float cm) {
+    float d = readDistance(sensor);
+    return (d > 0 && d <= cm);
+}
+
 int Robotrick::servoAngle(uint8_t idx) {
     if (idx < 1 || idx > RT_SERVO_N) return -1;
     return _servoPos[idx - 1];

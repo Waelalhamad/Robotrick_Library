@@ -224,6 +224,17 @@
 #define RT_COLOR_BLACK_C   40    // C تحتها = اسود/معتم (سطوع)
 #define RT_COLOR_EEPROM_ADDR 100 // مكان حفظ معايرة الألوان (بعيد عن معايرة الخط في 0..57)
 
+// ── Sharp IR distance sensors (GP2Y0A41SK0F, 4-30cm, تناظري) ──
+#define RT_DIST_N        2       // عدد الحساسات
+#define RT_DIST1_PIN    A5
+#define RT_DIST2_PIN    A6
+#define RT_DIST_VREF   5.0f      // فولتية المرجع (ADC = 5V)
+#define RT_DIST_A     12.08f     // تحويل: cm = A * v^B  (عايرهم لدقة أعلى)
+#define RT_DIST_B    -1.058f
+#define RT_DIST_MIN    4.0f      // أقل مسافة موثوقة (تحتها القراءة تنعكس!)
+#define RT_DIST_MAX   30.0f      // أقصى مدى
+#define RT_DIST_AVG      5       // عيّنات المعدّل (تنعيم)
+
 // ── Safety timeouts (ms) ───────────────────────────
 #define RT_MOVE_TIMEOUT  20000
 #define RT_TURN_TIMEOUT   5000
@@ -363,6 +374,11 @@ public:
     bool isYellow(uint8_t s) { return isColor(s, RT_YELLOW); }
     bool isWhite(uint8_t s)  { return isColor(s, RT_WHITE); }
     bool isBlack(uint8_t s)  { return isColor(s, RT_BLACK); }
+
+    // ── Sharp distance sensors (IR, sensor = 1..2) ──
+    float readDistance(uint8_t sensor);          // مسافة بالسم (4..30؛ معدّل + منحنى)
+    int   readDistanceRaw(uint8_t sensor);       // قراءة ADC خام 0..1023 (للمعايرة)
+    bool  distanceWithin(uint8_t sensor, float cm); // true لو الجسم أقرب من cm
 
     // ── Low-level (لو احتجت تتحكم يدوي) ────────────
     void  setMotors(int left, int right);   // -255..255 لكل جهة
