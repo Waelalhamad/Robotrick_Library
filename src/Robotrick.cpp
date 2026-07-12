@@ -871,6 +871,10 @@ void Robotrick::_colorBegin() {
     }
     _colorDeselectAll();
     Serial.print(F("[Robotrick] color sensors: ")); Serial.print(found); Serial.println(F("/4 موجود"));
+
+    // حمّل معايرة الألوان المحفوظة (لو موجودة) — تتفوّق على الافتراضي
+    if (colorLoadCalibration())
+        Serial.println(F("[Robotrick] ✓ معايرة الألوان محمّلة من EEPROM"));
 }
 
 bool Robotrick::_colorReadAvg(int slot, RTColorReading &out) {
@@ -953,9 +957,88 @@ void Robotrick::printColorRefs() {
 }
 void Robotrick::setColorLED(bool on) { digitalWrite(RT_COLOR_LED_PIN, on ? HIGH : LOW); }
 
+// ── حفظ/تحميل معايرة الألوان بالـ EEPROM ──────────────
+static const uint16_t COLOR_CAL_MAGIC = 0xC010;
+
+void Robotrick::colorSaveCalibration() {
+    int addr = RT_COLOR_EEPROM_ADDR;
+    EEPROM.put(addr, COLOR_CAL_MAGIC); addr += 2;
+    for (uint8_t i = 0; i < 6; i++) {
+        EEPROM.put(addr, _colorRef[i].nr);  addr += 4;
+        EEPROM.put(addr, _colorRef[i].ng);  addr += 4;
+        EEPROM.put(addr, _colorRef[i].nb);  addr += 4;
+        EEPROM.put(addr, _colorRef[i].set); addr += 1;
+    }
+    Serial.println(F("[color] ✓ انحفظت بالـ EEPROM"));
+}
+
+bool Robotrick::colorLoadCalibration() {
+    uint16_t magic; EEPROM.get(RT_COLOR_EEPROM_ADDR, magic);
+    if (magic != COLOR_CAL_MAGIC) return false;
+    int addr = RT_COLOR_EEPROM_ADDR + 2;
+    for (uint8_t i = 0; i < 6; i++) {
+        EEPROM.get(addr, _colorRef[i].nr);  addr += 4;
+        EEPROM.get(addr, _colorRef[i].ng);  addr += 4;
+        EEPROM.get(addr, _colorRef[i].nb);  addr += 4;
+        EEPROM.get(addr, _colorRef[i].set); addr += 1;
+    }
+    return true;
+}
+
+// ينطر سطر من Serial، يرجّع أول حرف (0 لو Enter فاضي)
+char Robotrick::_waitSerialChar() {
+    while (Serial.available()) Serial.read();   // فرّغ القديم
+    char first = 0; bool got = false;
+    for (;;) {
+        if (Serial.available()) {
+            char ch = Serial.read();
+            if (ch == '\r') continue;
+            if (ch == '\n') return got ? first : 0;
+            if (!got) { first = ch; got = true; }
+        }
+    }
+}
+
+// ★ معايرة موجّهة: تمشّي الطالب لون-لون وتحفظ للأبد
+void Robotrick::calibrateColors(uint8_t sensor) {
+    if (sensor < 1 || sensor > RT_COLOR_N) sensor = 1;
+    Serial.println(F("\n===== معايرة الألوان ====="));
+    Serial.print(F("رح نعاير من الحساس S")); Serial.println(sensor);
+    Serial.println(F("لكل لون: حطّه أمام الحساس واضغط Enter."));
+    Serial.println(F("(اكتب s ثم Enter لتخطّي لون ما بدك ياه)"));
+    const RTColor order[6] = { RT_RED, RT_GREEN, RT_BLUE, RT_YELLOW, RT_WHITE, RT_BLACK };
+    for (uint8_t i = 0; i < 6; i++) {
+        Serial.print(F("\n>> حطّ اللون ")); Serial.print(colorName(order[i]));
+        Serial.println(F(" أمام الحساس واضغط Enter:"));
+        char c = _waitSerialChar();
+        if (c == 's' || c == 'S') { Serial.println(F("   (تخطّي)")); continue; }
+        teachColor(order[i], sensor);
+    }
+    colorSaveCalibration();
+    Serial.println(F("\n✓ خلصت! انحفظت بالـ EEPROM — ما بدك تعيدها كل تشغيل."));
+}
+
 const char* Robotrick::colorName(RTColor c) {
     static const char* names[7] = { "احمر", "اخضر", "ازرق", "اصفر", "ابيض", "اسود", "؟" };
     return names[((int)c >= 0 && (int)c <= 6) ? (int)c : 6];
+}
+
+// اقرأ 3 مرات ورجّع اللون الأكثر تكراراً — قرار أثبت (ضد قراءة شاذّة)
+RTColor Robotrick::readColorStable(uint8_t sensor) {
+    uint8_t cnt[7] = { 0, 0, 0, 0, 0, 0, 0 };
+    for (uint8_t i = 0; i < 3; i++) {
+        RTColor c = readColor(sensor);
+        if ((int)c >= 0 && (int)c < 7) cnt[(int)c]++;
+    }
+    uint8_t mx = 0, best = 6;                          // 6 = UNKNOWN لو ما في أغلبية
+    for (uint8_t i = 0; i < 7; i++) if (cnt[i] > mx) { mx = cnt[i]; best = i; }
+    return (RTColor)best;
+}
+
+void Robotrick::printColor(uint8_t sensor) {
+    RTColor c = readColor(sensor);
+    Serial.print(F("[color] S")); Serial.print(sensor);
+    Serial.print(F(" = ")); Serial.println(colorName(c));
 }
 
 int Robotrick::servoAngle(uint8_t idx) {

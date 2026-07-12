@@ -222,6 +222,7 @@
 #define RT_COLOR_GAIN    0x01    // 4x
 #define RT_COLOR_AVG        5    // عدد العيّنات للمعدّل (تنعيم)
 #define RT_COLOR_BLACK_C   40    // C تحتها = اسود/معتم (سطوع)
+#define RT_COLOR_EEPROM_ADDR 100 // مكان حفظ معايرة الألوان (بعيد عن معايرة الخط في 0..57)
 
 // ── Safety timeouts (ms) ───────────────────────────
 #define RT_MOVE_TIMEOUT  20000
@@ -343,10 +344,25 @@ public:
     bool    readColorRGB(uint8_t sensor, RTColorReading &out);  // خام + نِسب + تصنيف
     bool    colorPresent(uint8_t sensor);            // هل الحساس موجود؟ (1..4)
     void    teachColor(RTColor color, uint8_t sensor);  // علّم مرجع لون من حساس (معايرة حيّة)
+    void    calibrateColors(uint8_t sensor = 1);     // ★ معايرة موجّهة: لون-لون + حفظ EEPROM
+    bool    colorLoadCalibration();                  // حمّل مراجع الألوان من EEPROM (true=نجح)
+    void    colorSaveCalibration();                  // احفظ المراجع بالـ EEPROM
     void    resetColorRefs();                        // رجّع مراجع الألوان للقيم الافتراضية
     void    printColorRefs();                        // اطبع المراجع
     void    setColorLED(bool on);                    // إضاءة الألوان on/off
     static const char* colorName(RTColor c);         // اسم اللون (للطباعة)
+
+    // ── أسهل استعمال بالمهمة (بعد المعايرة) ──────────
+    RTColor readColorStable(uint8_t sensor);         // اقرأ 3 مرات ورجّع الأغلب (أثبت للقرار)
+    void    printColor(uint8_t sensor);              // اطبع لون الحساس (للتجربة)
+    // تحقّق مباشر — اكتب: if (bot.isRed(1)) { ... }
+    bool isColor(uint8_t sensor, RTColor c) { return readColor(sensor) == c; }
+    bool isRed(uint8_t s)    { return isColor(s, RT_RED); }
+    bool isGreen(uint8_t s)  { return isColor(s, RT_GREEN); }
+    bool isBlue(uint8_t s)   { return isColor(s, RT_BLUE); }
+    bool isYellow(uint8_t s) { return isColor(s, RT_YELLOW); }
+    bool isWhite(uint8_t s)  { return isColor(s, RT_WHITE); }
+    bool isBlack(uint8_t s)  { return isColor(s, RT_BLACK); }
 
     // ── Low-level (لو احتجت تتحكم يدوي) ────────────
     void  setMotors(int left, int right);   // -255..255 لكل جهة
@@ -414,6 +430,7 @@ private:
     void    _colorConfig();
     bool    _colorReadAvg(int slot, RTColorReading &out);
     RTColor _colorClassify(const RTColorReading &rd);
+    char    _waitSerialChar();        // ينطر سطر من Serial، يرجّع أول حرف (للمعايرة الموجّهة)
     void     _servoBegin();           // سجّل البنات (بدون attach — كسول)
     bool     _servoEnsure(uint8_t i); // فعّل السيرفو i لو مش مفعّل؛ true=جاهز
     void     _lineParkServos();       // افصل كل السيرفوهات قبل تتبع الخط (ضد تعارض Timer5)

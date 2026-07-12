@@ -43,7 +43,8 @@ void printMenu() {
     Serial.println(F("  M <ms>   LINE monitor — حط الروبوت عالخط واقرأ (M 6000)"));
     Serial.println(F("  C <ms>   STEER check — حرّك الخط وشوف لوين رح يلف (C 10000)"));
     Serial.println(F("  E [n]    اقرأ لون الحساس n (1..4) أو الأربعة (E)"));
-    Serial.println(F("  Y <لون> <حساس>  عاير لون (Y 1 3 = احمر من S3)  D اطبع  F رجّع"));
+    Serial.println(F("  Y        ★ معايرة الألوان الموجّهة (لون-لون + حفظ EEPROM) — الأسهل"));
+    Serial.println(F("  Y <لون> <حساس>  علّم لون واحد (Y 1 3)   D اطبع   F رجّع"));
     Serial.println(F("  j <n>    follow line to junction #n  (j 1)"));
     Serial.println(F("  m <cm>   follow line for cm          (m 40)"));
     Serial.println(F("  n <cm>   LINE2 خوارزمية بديلة         (n 40)"));
@@ -308,13 +309,13 @@ void handle(char cmd, float val, float val2, float val3) {
             }
         }
     }
-    else if (cmd == 'Y') {   // عاير لون:  Y <لون 1..6> <حساس 1..4>   (1احمر..6اسود)
+    else if (cmd == 'Y') {   // معايرة الألوان
         int col = (int)val;      // 1احمر 2اخضر 3ازرق 4اصفر 5ابيض 6اسود
         int sen = (int)val2;
         if (col >= 1 && col <= 6 && sen >= 1 && sen <= 4)
-            bot.teachColor((RTColor)(col - 1), (uint8_t)sen);
+            bot.teachColor((RTColor)(col - 1), (uint8_t)sen);  // Y <لون> <حساس> = علّم لون واحد
         else
-            Serial.println(F("  استعمال: Y <لون 1..6> <حساس 1..4>"));
+            bot.calibrateColors(sen >= 1 ? sen : 1);           // Y لحاله = معايرة موجّهة (كل الألوان)
     }
     else if (cmd == 'D') {   // اطبع مراجع الألوان
         bot.printColorRefs();

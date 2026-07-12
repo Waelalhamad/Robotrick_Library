@@ -100,11 +100,25 @@ void deliverToTarget() {
     bot.liftDown(800);                  // أنزل الحمولة
 }
 
+// ─────────────────────────────────────────────────────
+//  ★ الأسهل للطلاب: تحقّق مباشر بالمهمة (بعد معايرة Y)
+//    اقرأ كأنها جملة إنجليزية — بدون enum ولا switch
+// ─────────────────────────────────────────────────────
+void simpleMission() {
+    bot.followLineToJunction(1);
+    bot.stop(); delay(200);
+
+    if      (bot.isRed(1))    bot.turnLeft(90);    // أحمر → يسار
+    else if (bot.isGreen(1))  bot.turnRight(90);   // أخضر → يمين
+    else if (bot.isBlue(1))   bot.forward(30);     // أزرق → قدّام
+    else if (bot.isYellow(1)) bot.liftUpBy(500);   // أصفر → ارفع
+}
+
 void setup() {
     bot.begin();
     Serial.println(F("=== Color Scenario Example ==="));
     bot.printColorRefs();
-    Serial.println(F("اكتب: c=اقرأ ونفّذ  m=مهمة 3 محطات  t=احفظ هدف  g=سلّم للهدف"));
+    Serial.println(F("اكتب: c=اقرأ ونفّذ  m=مهمة 3 محطات  t=احفظ هدف  g=سلّم  S=مهمة بسيطة"));
 }
 
 void loop() {
@@ -115,5 +129,6 @@ void loop() {
         else if (ch == 'm') runMission(3);                    // مهمة متعددة المحطات
         else if (ch == 't') readTarget();                     // احفظ قرار
         else if (ch == 'g') deliverToTarget();                // استعمل القرار المحفوظ
+        else if (ch == 'S') simpleMission();                  // ★ المهمة البسيطة (isRed/isGreen..)
     }
 }

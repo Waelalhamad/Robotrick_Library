@@ -633,6 +633,30 @@ void handleLine(char* line) {
     return;
   }
 
+  // ── COLOR ── (اقرأ لون الأربعة)
+  if (strcmp(cmd, "COLOR") == 0) {
+    RTColor c[4]; bot.readAllColors(c);
+    Serial.print(F("COLORS"));
+    for (uint8_t i = 0; i < 4; i++) { Serial.print(' '); Serial.print(bot.colorName(c[i])); }
+    Serial.println();
+    Serial.println(F("ACK COLOR"));
+    return;
+  }
+
+  // ── COLORTEACH <color 1..6> <sensor 1..4> ── (علّم لون واحد)
+  if (strcmp(cmd, "COLORTEACH") == 0) {
+    long col, sen;
+    if (!nextLong(&col) || !nextLong(&sen)) { Serial.println(F("ERR COLORTEACH needs <color1..6> <sensor1..4>")); return; }
+    bot.teachColor((RTColor)(col - 1), (uint8_t)sen);
+    Serial.println(F("ACK COLORTEACH"));
+    return;
+  }
+
+  // ── COLORSAVE / COLORLOAD / COLORPRINT ──
+  if (strcmp(cmd, "COLORSAVE")  == 0) { bot.colorSaveCalibration(); Serial.println(F("ACK COLORSAVE"));  return; }
+  if (strcmp(cmd, "COLORLOAD")  == 0) { bot.colorLoadCalibration(); Serial.println(F("ACK COLORLOAD"));  return; }
+  if (strcmp(cmd, "COLORPRINT") == 0) { bot.printColorRefs();       Serial.println(F("ACK COLORPRINT")); return; }
+
   // ── RESETH ── (non-blocking)
   if (strcmp(cmd, "RESETH") == 0) {
     Serial.println(F("ACK RESETH"));
