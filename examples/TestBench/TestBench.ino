@@ -44,6 +44,7 @@ void printMenu() {
     Serial.println(F("  C <ms>   STEER check — حرّك الخط وشوف لوين رح يلف (C 10000)"));
     Serial.println(F("  E [n]    اقرأ لون الحساس n (1..4) أو الأربعة (E)"));
     Serial.println(F("  $        اقرأ تيار الروبوت (ACS712)   %  عاير صفر التيار"));
+    Serial.println(F("  & <ث>    امشِ مستقيم واطبع التيار لايف (& 3)"));
     Serial.println(F("  X        اقرأ حساسات المسافة (Sharp A5/A6) بالسم + خام"));
     Serial.println(F("  > <cm>        امشِ لحد ما المسافة = cm ثم وقّف (> 10)"));
     Serial.println(F("  > <min> <max> امشِ ووقّف ضمن رينج (> 9 11) — أدق"));
@@ -346,6 +347,20 @@ void handle(char cmd, float val, float val2, float val3) {
     }
     else if (cmd == '%') {   // عاير صفر التيار (المحركات واقفة)
         bot.calibrateCurrentZero();
+    }
+    else if (cmd == '&') {   // امشِ مستقيم واطبع التيار لايف:  & <ثواني>
+        uint32_t secs = (val >= 1) ? (uint32_t)val : 3;
+        Serial.print(F(">> امشِ ")); Serial.print(secs); Serial.println(F("s + اقرأ التيار:"));
+        bot.resetHeading();
+        uint32_t end = millis() + secs * 1000UL;
+        while (millis() < end) {
+            bot.goStraight(120);                         // يمشي مستقيم
+            Serial.print(F("  I = ")); Serial.print(bot.readCurrent(), 2);
+            Serial.println(F(" A"));
+            delay(120);
+        }
+        bot.stop();
+        Serial.println(F("  وقف."));
     }
     else if (cmd == 'X') {   // اقرأ حساسات المسافة (Sharp)
         for (uint8_t s = 1; s <= 2; s++) {
