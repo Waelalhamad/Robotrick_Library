@@ -1042,6 +1042,28 @@ void Robotrick::printColor(uint8_t sensor) {
 }
 
 // ─────────────────────────────────────────────────────
+//  ACS712 CURRENT — تيار الروبوت الكلّي (على A0)
+//  الخرج تناظري: 0 تيار = نص المرجع (~2.5V)، والميل = mV/أمبير.
+// ─────────────────────────────────────────────────────
+float Robotrick::readCurrent() {
+    long sum = 0;
+    for (uint8_t i = 0; i < RT_CURRENT_AVG; i++) sum += analogRead(RT_CURRENT_PIN);
+    float v = (sum / (float)RT_CURRENT_AVG) * (RT_CURRENT_VREF / 1023.0f);
+    return (v - _currentZeroV) / (RT_CURRENT_MV_PER_A / 1000.0f);   // أمبير
+}
+
+int Robotrick::readCurrentRaw() { return analogRead(RT_CURRENT_PIN); }
+
+// عاير نقطة الصفر — لازم المحركات واقفة (تيار قريب 0)
+void Robotrick::calibrateCurrentZero() {
+    Serial.println(F("[Robotrick] معايرة صفر التيار — تأكد المحركات واقفة..."));
+    long sum = 0;
+    for (uint8_t i = 0; i < 50; i++) { sum += analogRead(RT_CURRENT_PIN); delay(4); }
+    _currentZeroV = (sum / 50.0f) * (RT_CURRENT_VREF / 1023.0f);
+    Serial.print(F("  zero = ")); Serial.print(_currentZeroV, 3); Serial.println(F(" V"));
+}
+
+// ─────────────────────────────────────────────────────
 //  SHARP IR DISTANCE (GP2Y0A41SK0F) — 4..30cm تناظري
 //  الخرج غير خطّي: v ~ 1/distance. نحوّل: cm = A * v^B.
 //  ⚠️ تحت 4cm القراءة تنعكس (تعطي مسافة أكبر) — لا تعتمد عليها.
@@ -1352,9 +1374,34 @@ void Robotrick::lineSteerCheck(uint32_t ms) {
 bool Robotrick::followLineToJunction(uint8_t nJunctions) { return _followLine(nJunctions, 0); }
 bool Robotrick::followLineForCM(float cm)                { return _followLine(0, cm); }
 
+// اتبع الخط لحد ما يصير الجسم قدّامك على targetCm ثم وقّف
+bool Robotrick::followLineUntilDistance(uint8_t sensor, float targetCm) {
+    Serial.print(F("[Robotrick] follow line until ")); Serial.print(targetCm); Serial.println(F("cm"));
+    return _followLine(0, 0, sensor, targetCm);
+}
+
+// اتبع الخط ووقّف بحيث المسافة ضمن [minCm, maxCm] (يتراجع لو تجاوز)
+bool Robotrick::followLineToRange(uint8_t sensor, float minCm, float maxCm) {
+    if (minCm > maxCm) { float t = minCm; minCm = maxCm; maxCm = t; }
+    _followLine(0, 0, sensor, maxCm);                 // اتبع لحد ما يدخل الرينج من فوق
+    uint32_t timeout = millis() + 3000;
+    float d = readDistance(sensor);
+    while (d < minCm && millis() < timeout) {          // تجاوز؟ تراجع بطيء مستقيم
+        setMotors(-RT_DRIVE_MIN, -RT_DRIVE_MIN);
+        delay(20);
+        d = readDistance(sensor);
+    }
+    stop();
+    d = readDistance(sensor);
+    bool ok = (d >= minCm && d <= maxCm);
+    Serial.print(F("  final ")); Serial.print(d, 1);
+    Serial.println(ok ? F("cm ✓ ضمن الرينج") : F("cm خارج الرينج"));
+    return ok;
+}
+
 //  المحرك المشترك: PD على موقع الخط + عدّ تقاطعات أو مسافة
 //  ترجع true إذا نجح، false إذا ضاع الخط/انتهت المهلة
-bool Robotrick::_followLine(uint8_t nJunctions, float cm) {
+bool Robotrick::_followLine(uint8_t nJunctions, float cm, uint8_t distSensor, float distTarget) {
     if (!_qtrReady) {
         // جرّب تحمّل المعايرة المحفوظة أوتوماتيك (بدون تحريك)
         if (!lineLoadCalibration()) {
@@ -1384,6 +1431,14 @@ bool Robotrick::_followLine(uint8_t nJunctions, float cm) {
 
     while (millis() < timeout) {
         _serviceMotor4();   // خدمة الرافعة async أثناء تتبع الخط
+
+        // وقوف على المسافة (لو مطلوب): اتبع الخط لحد ما الجسم قدّامك يوصل
+        if (distSensor && readDistance(distSensor) <= distTarget) {
+            stop();
+            Serial.println(F("  → distance reached (line)"));
+            return true;
+        }
+
         // نقرأ calibrated (0..1000) ونحسب الموقع بأنفسنا — نتجاهل الحساسات الخربانة
         _qtr.readCalibrated(_qtrVals);
 

@@ -43,6 +43,7 @@ void printMenu() {
     Serial.println(F("  M <ms>   LINE monitor — حط الروبوت عالخط واقرأ (M 6000)"));
     Serial.println(F("  C <ms>   STEER check — حرّك الخط وشوف لوين رح يلف (C 10000)"));
     Serial.println(F("  E [n]    اقرأ لون الحساس n (1..4) أو الأربعة (E)"));
+    Serial.println(F("  $        اقرأ تيار الروبوت (ACS712)   %  عاير صفر التيار"));
     Serial.println(F("  X        اقرأ حساسات المسافة (Sharp A5/A6) بالسم + خام"));
     Serial.println(F("  > <cm>        امشِ لحد ما المسافة = cm ثم وقّف (> 10)"));
     Serial.println(F("  > <min> <max> امشِ ووقّف ضمن رينج (> 9 11) — أدق"));
@@ -51,6 +52,8 @@ void printMenu() {
     Serial.println(F("  j <n>    follow line to junction #n  (j 1)"));
     Serial.println(F("  m <cm>   follow line for cm          (m 40)"));
     Serial.println(F("  n <cm>   LINE2 خوارزمية بديلة         (n 40)"));
+    Serial.println(F("  . <cm>       اتبع الخط لحد المسافة (. 10)"));
+    Serial.println(F("  . <min> <max> اتبع الخط ووقّف ضمن رينج (. 9 11)"));
     Serial.println(F("  q        square: (fwd30 + left90) x4"));
     Serial.println(F("  4 <spd>  motor4 (رافعة) بسرعة spd (-255..255، 0=وقوف)"));
     Serial.println(F("  u <ms>   liftUp مدة ms       i <ms>  liftDown  (حابسة)"));
@@ -181,6 +184,17 @@ void handle(char cmd, float val, float val2, float val3) {
         Serial.print(F(">> LINE2 (خوارزمية بديلة) for ")); Serial.print(val); Serial.println(F("cm"));
         bool ok = bot.followLine2(val);
         Serial.println(ok ? F("  SUCCESS") : F("  FAILED (lost/timeout)"));
+    }
+    else if (cmd == '.') {   // . <cm> اتبع الخط لحد المسافة  /  . <min> <max> رينج
+        if (val2 >= 1) {
+            Serial.print(F(">> follow line to range ")); Serial.print(val);
+            Serial.print(F("-")); Serial.print(val2); Serial.println(F("cm"));
+            bot.followLineToRange(1, val, val2);
+        } else {
+            float target = (val >= 1) ? val : 10;
+            Serial.print(F(">> follow line until ")); Serial.print(target); Serial.println(F("cm"));
+            bot.followLineUntilDistance(1, target);
+        }
     }
     else if (cmd == 'q') {
         Serial.println(F(">> square test"));
@@ -325,6 +339,13 @@ void handle(char cmd, float val, float val2, float val3) {
     }
     else if (cmd == 'F') {   // رجّع مراجع الألوان للافتراضي
         bot.resetColorRefs();
+    }
+    else if (cmd == '$') {   // اقرأ تيار الروبوت (ACS712)
+        Serial.print(F("  current = ")); Serial.print(bot.readCurrent(), 2);
+        Serial.print(F(" A   (raw ")); Serial.print(bot.readCurrentRaw()); Serial.println(F(")"));
+    }
+    else if (cmd == '%') {   // عاير صفر التيار (المحركات واقفة)
+        bot.calibrateCurrentZero();
     }
     else if (cmd == 'X') {   // اقرأ حساسات المسافة (Sharp)
         for (uint8_t s = 1; s <= 2; s++) {

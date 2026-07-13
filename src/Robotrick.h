@@ -235,6 +235,14 @@
 #define RT_DIST_MAX   30.0f      // أقصى مدى
 #define RT_DIST_AVG      5       // عيّنات المعدّل (تنعيم)
 
+// ── ACS712 current sensor (على A0، يقيس تيار الروبوت من 12V) ──
+#define RT_CURRENT_PIN     A0
+#define RT_CURRENT_VREF   5.0f    // فولتية المرجع (ADC)
+// الحساسية حسب موديل ACS712: 5A=185، 20A=100، 30A=66 (mV لكل أمبير)
+#define RT_CURRENT_MV_PER_A 100.0f
+#define RT_CURRENT_ZERO_V   2.5f  // فولت عند 0 تيار (نص المرجع — يُعاير)
+#define RT_CURRENT_AVG      10    // عيّنات المعدّل (تنعيم)
+
 // ── Safety timeouts (ms) ───────────────────────────
 #define RT_MOVE_TIMEOUT  20000
 #define RT_TURN_TIMEOUT   5000
@@ -303,6 +311,8 @@ public:
     void lineSaveCalibration();                    // احفظ المعايرة الحالية بالـ EEPROM
     bool followLineToJunction(uint8_t nJunctions = 1);  // اتبع الخط لحد التقاطع الـ n
     bool followLineForCM(float cm);                // اتبع الخط لمسافة محددة
+    bool followLineUntilDistance(uint8_t sensor, float targetCm);      // اتبع الخط لحد ما المسافة = cm
+    bool followLineToRange(uint8_t sensor, float minCm, float maxCm);  // اتبع الخط ووقّف ضمن رينج
     bool followLine2(float cm);                    // خوارزمية بديلة (أسلوب MegaShield) للتجربة
     // ── Line-follower tuning (عدّل لايف بدون recompile) ──
     void setLineSpeed(int base, int maxSpd, int minSpd);  // سرعات العجلة (سالب = لا تغيّر)
@@ -376,6 +386,11 @@ public:
     bool isBlack(uint8_t s)  { return isColor(s, RT_BLACK); }
 
     // ── Sharp distance sensors (IR, sensor = 1..2) ──
+    // ── Current sensor (ACS712 على A0) ──────────────
+    float readCurrent();                         // تيار الروبوت بالأمبير (A)
+    int   readCurrentRaw();                      // قراءة ADC خام 0..1023
+    void  calibrateCurrentZero();                // عاير نقطة الصفر (المحركات واقفة!)
+
     float readDistance(uint8_t sensor);          // مسافة بالسم (4..30؛ معدّل + منحنى)
     int   readDistanceRaw(uint8_t sensor);       // قراءة ADC خام 0..1023 (للمعايرة)
     bool  distanceWithin(uint8_t sensor, float cm); // true لو الجسم أقرب من cm
@@ -423,7 +438,8 @@ private:
     bool       _qtrReady = false;     // صار calibration؟
     bool       _qtrPinsInit = false;  // صارت تهيئة البنات؟
     void _lineBegin();                // تهيئة بنات الـ QTR (مرة واحدة)
-    bool _followLine(uint8_t nJunctions, float cm);  // المحرك المشترك
+    bool _followLine(uint8_t nJunctions, float cm,
+                     uint8_t distSensor = 0, float distTarget = 0);  // المحرك المشترك
 
     // servos
     Servo    _servo[RT_SERVO_N];
@@ -435,6 +451,7 @@ private:
     uint8_t  _m4Mode = 0;             // 0=واقف/دايم  1=بالوقت  2=بالانكودر
     long     _m4TargetCount = 0;      // هدف العدّات (وضع الانكودر)
     bool     _liftUseEnc = RT_LIFT_USE_ENCODER;   // خيار: انكودر أو وقت (لايف)
+    float    _currentZeroV = RT_CURRENT_ZERO_V;   // فولت ACS712 عند 0 تيار (يُعاير)
 #if RT_LIFT_USE_ENCODER
     Encoder  _liftEnc{RT_M4_ENC_A, RT_M4_ENC_B};  // انكودر الرافعة (مفعّل بالكومبايل)
 #endif

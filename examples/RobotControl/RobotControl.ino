@@ -652,6 +652,19 @@ void handleLine(char* line) {
     return;
   }
 
+  // ── CURRENT ── (تيار الروبوت ACS712)
+  if (strcmp(cmd, "CURRENT") == 0) {
+    Serial.print(F("CURRENT ")); Serial.print(bot.readCurrent(), 2); Serial.println(F(" A"));
+    Serial.println(F("ACK CURRENT"));
+    return;
+  }
+  // ── CURRENTZERO ── (عاير صفر التيار)
+  if (strcmp(cmd, "CURRENTZERO") == 0) {
+    bot.calibrateCurrentZero();
+    Serial.println(F("ACK CURRENTZERO"));
+    return;
+  }
+
   // ── DIST ── (اقرأ حساسات المسافة Sharp)
   if (strcmp(cmd, "DIST") == 0) {
     Serial.print(F("DIST "));
@@ -668,6 +681,16 @@ void handleLine(char* line) {
     Serial.println(F("ACK FWDUNTIL"));
     busy = true; bool ok = bot.forwardUntilDistance((uint8_t)sen, (float)cm); busy = false;
     Serial.println(ok ? F("DONE FWDUNTIL") : F("ERR FWDUNTIL timeout"));
+    return;
+  }
+
+  // ── LINEUNTIL <sensor> <cm> ── (اتبع الخط لحد المسافة؛ blocking)
+  if (strcmp(cmd, "LINEUNTIL") == 0) {
+    long sen, cm;
+    if (!nextLong(&sen) || !nextLong(&cm)) { Serial.println(F("ERR LINEUNTIL needs <sensor> <cm>")); return; }
+    Serial.println(F("ACK LINEUNTIL"));
+    busy = true; bool ok = bot.followLineUntilDistance((uint8_t)sen, (float)cm); busy = false;
+    Serial.println(ok ? F("DONE LINEUNTIL") : F("ERR LINEUNTIL"));
     return;
   }
 
