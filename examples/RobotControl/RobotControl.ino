@@ -661,6 +661,16 @@ void handleLine(char* line) {
     return;
   }
 
+  // ── FWDUNTIL <sensor> <cm> ── (امشِ لحد ما المسافة = cm؛ blocking)
+  if (strcmp(cmd, "FWDUNTIL") == 0) {
+    long sen, cm;
+    if (!nextLong(&sen) || !nextLong(&cm)) { Serial.println(F("ERR FWDUNTIL needs <sensor> <cm>")); return; }
+    Serial.println(F("ACK FWDUNTIL"));
+    busy = true; bool ok = bot.forwardUntilDistance((uint8_t)sen, (float)cm); busy = false;
+    Serial.println(ok ? F("DONE FWDUNTIL") : F("ERR FWDUNTIL timeout"));
+    return;
+  }
+
   // ── COLORSAVE / COLORLOAD / COLORPRINT ──
   if (strcmp(cmd, "COLORSAVE")  == 0) { bot.colorSaveCalibration(); Serial.println(F("ACK COLORSAVE"));  return; }
   if (strcmp(cmd, "COLORLOAD")  == 0) { bot.colorLoadCalibration(); Serial.println(F("ACK COLORLOAD"));  return; }

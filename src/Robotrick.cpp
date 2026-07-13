@@ -1068,6 +1068,68 @@ bool Robotrick::distanceWithin(uint8_t sensor, float cm) {
     return (d > 0 && d <= cm);
 }
 
+// امشِ مستقيم لحد ما يصير الجسم قدّامك على targetCm ثم وقّف بدقة.
+// • استقامة بالجايرو (نفس driveStraight).  • تبطئة قبل الهدف تمنع الاندفاع.
+// • فرملة عكسية قصيرة بالنهاية.  • timeout أمان.
+bool Robotrick::forwardUntilDistance(uint8_t sensor, float targetCm, int cruise) {
+    Serial.print(F("[Robotrick] forward until ")); Serial.print(targetCm); Serial.println(F("cm"));
+    cruise = constrain(cruise, RT_DRIVE_MIN, 255);
+    const int   minPwm   = RT_DRIVE_MIN;   // أدنى سرعة قرب الهدف (ما يطفي)
+    const float slowZone = 12.0f;          // ابدأ تبطّئ قبل الهدف بهالمسافة
+    resetHeading();
+    uint32_t timeout = millis() + RT_MOVE_TIMEOUT;
+    float d = RT_DIST_MAX;
+    while (millis() < timeout) {
+        _updateHeading();
+        d = readDistance(sensor);
+        if (d <= targetCm) break;                       // وصل
+
+        float gap = d - targetCm;
+        int spd = (gap >= slowZone) ? cruise
+                  : minPwm + (int)((cruise - minPwm) * (gap / slowZone));   // تبطئة تناسبية
+        // heading hold (نفس منطق driveStraight)
+        float herr = _heading;
+        if (herr > -_hdgDeadband && herr < _hdgDeadband) herr = 0;
+        int corr = (int)(RT_STEER_SIGN * (_hdgKp * herr + _hdgKd * _gyroRate));
+        setMotors(spd - corr, spd + corr);
+    }
+    stop();
+    setMotors(-90, -90); delay(40); stop();             // فرملة عكسية قصيرة
+    d = readDistance(sensor);
+    Serial.print(F("  stopped at ")); Serial.print(d, 1); Serial.println(F("cm"));
+    return (d <= targetCm + 3.0f);                       // نجح لو قريب من الهدف
+}
+
+// امشِ ووقّف بحيث المسافة تصير ضمن [minCm, maxCm] — دقة أعلى.
+// يقترب لحد الحدّ الأبعد (max)، ولو تجاوز للأقرب (< min) يتراجع شوي.
+bool Robotrick::forwardToRange(uint8_t sensor, float minCm, float maxCm, int cruise) {
+    if (minCm > maxCm) { float t = minCm; minCm = maxCm; maxCm = t; }
+    forwardUntilDistance(sensor, maxCm, cruise);         // اقترب لحد ما يدخل الرينج من فوق
+    // لو الزخم قرّبه أكثر من اللازم (< min) → تراجع ببطء
+    uint32_t timeout = millis() + 3000;
+    float d = readDistance(sensor);
+    while (d < minCm && millis() < timeout) {
+        setMotors(-RT_DRIVE_MIN, -RT_DRIVE_MIN);         // خلف بطيء
+        delay(20);
+        d = readDistance(sensor);
+    }
+    stop();
+    d = readDistance(sensor);
+    bool ok = (d >= minCm && d <= maxCm);
+    Serial.print(F("  final ")); Serial.print(d, 1);
+    Serial.println(ok ? F("cm ✓ ضمن الرينج") : F("cm خارج الرينج"));
+    return ok;
+}
+
+// خطوة مشي مستقيم واحدة (non-blocking) — بالجايرو. ناديها بلوب مع شرطك.
+void Robotrick::goStraight(int speed) {
+    _updateHeading();
+    float herr = _heading;
+    if (herr > -_hdgDeadband && herr < _hdgDeadband) herr = 0;
+    int corr = (int)(RT_STEER_SIGN * (_hdgKp * herr + _hdgKd * _gyroRate));
+    setMotors(speed - corr, speed + corr);
+}
+
 int Robotrick::servoAngle(uint8_t idx) {
     if (idx < 1 || idx > RT_SERVO_N) return -1;
     return _servoPos[idx - 1];

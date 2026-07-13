@@ -44,6 +44,8 @@ void printMenu() {
     Serial.println(F("  C <ms>   STEER check — حرّك الخط وشوف لوين رح يلف (C 10000)"));
     Serial.println(F("  E [n]    اقرأ لون الحساس n (1..4) أو الأربعة (E)"));
     Serial.println(F("  X        اقرأ حساسات المسافة (Sharp A5/A6) بالسم + خام"));
+    Serial.println(F("  > <cm>        امشِ لحد ما المسافة = cm ثم وقّف (> 10)"));
+    Serial.println(F("  > <min> <max> امشِ ووقّف ضمن رينج (> 9 11) — أدق"));
     Serial.println(F("  Y        ★ معايرة الألوان الموجّهة (لون-لون + حفظ EEPROM) — الأسهل"));
     Serial.println(F("  Y <لون> <حساس>  علّم لون واحد (Y 1 3)   D اطبع   F رجّع"));
     Serial.println(F("  j <n>    follow line to junction #n  (j 1)"));
@@ -330,6 +332,18 @@ void handle(char cmd, float val, float val2, float val3) {
             Serial.print(F(" = ")); Serial.print(bot.readDistance(s), 1);
             Serial.print(F(" cm  (raw ")); Serial.print(bot.readDistanceRaw(s));
             Serial.println(F(")"));
+        }
+    }
+    else if (cmd == '>') {   // > <cm>  امشِ لحد المسافة  /  > <min> <max>  ضمن رينج
+        if (val2 >= 1) {     // رينج
+            Serial.print(F(">> forward to range ")); Serial.print(val);
+            Serial.print(F("-")); Serial.print(val2); Serial.println(F("cm"));
+            bot.forwardToRange(1, val, val2);
+        } else {
+            float target = (val >= 1) ? val : 10;
+            Serial.print(F(">> forward until ")); Serial.print(target); Serial.println(F("cm"));
+            bool ok = bot.forwardUntilDistance(1, target);
+            Serial.println(ok ? F("  وصل") : F("  timeout/بعيد"));
         }
     }
     else if (cmd == 'x') {

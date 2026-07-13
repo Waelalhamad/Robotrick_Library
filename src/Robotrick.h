@@ -379,6 +379,14 @@ public:
     float readDistance(uint8_t sensor);          // مسافة بالسم (4..30؛ معدّل + منحنى)
     int   readDistanceRaw(uint8_t sensor);       // قراءة ADC خام 0..1023 (للمعايرة)
     bool  distanceWithin(uint8_t sensor, float cm); // true لو الجسم أقرب من cm
+    // امشِ مستقيم (بالجايرو) لحد ما يصير الجسم قدّامك على targetCm ثم وقّف.
+    // يبطّئ قبل الهدف (ضد الاندفاع). يرجّع true لو وصل. cruise = سرعة المشي.
+    bool  forwardUntilDistance(uint8_t sensor, float targetCm, int cruise = 120);
+    // امشِ ووقّف بحيث تصير المسافة ضمن [minCm, maxCm] (دقة أعلى — يتراجع لو تجاوز).
+    bool  forwardToRange(uint8_t sensor, float minCm, float maxCm, int cruise = 120);
+    // خطوة مشي مستقيم واحدة (non-blocking، بالجايرو) — ناديها بلوب مع شرطك الخاص.
+    // speed موجب=قدّام، سالب=خلف. اعمل resetHeading() قبل اللوب.
+    void  goStraight(int speed);
 
     // ── Low-level (لو احتجت تتحكم يدوي) ────────────
     void  setMotors(int left, int right);   // -255..255 لكل جهة
